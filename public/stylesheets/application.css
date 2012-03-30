@@ -165,8 +165,8 @@ tr.open span.expander {background-image: url(../images/bullet_toggle_minus.png);
 tr.changeset { height: 20px }
 tr.changeset ul, ol { margin-top: 0px; margin-bottom: 0px; }
 tr.changeset td.revision_graph { width: 15%; background-color: #fffffb; }
-tr.changeset td.author { text-align: center; width: 15%; white-space:nowrap;}
-tr.changeset td.committed_on { text-align: center; width: 15%; white-space:nowrap;}
+tr.changeset td.author { text-align: center; width: 15%; }
+tr.changeset td.committed_on { text-align: center; width: 15%; }
 tr.changeset td.comments_nowrap { width: 45%; white-space:nowrap;}
 
 table.files tr.file td { text-align: center; }
@@ -365,8 +365,8 @@ table#time-report tbody tr.last-level { font-style: normal; color: #555; }
 table#time-report tbody tr.total { font-style: normal; font-weight: bold; color: #555; background-color:#EEEEEE; }
 table#time-report .hours-dec { font-size: 0.9em; }
 
-div.wiki-page .contextual a {opacity: 0.4}
-div.wiki-page .contextual a:hover {opacity: 1}
+form .attributes { margin-bottom: 8px; }
+form .attributes p { padding-top: 1px; padding-bottom: 2px; }
 
 form .attributes select { width: 60%; }
 input#issue_subject { width: 99%; }
@@ -391,7 +391,7 @@ ul.properties li span {font-style:italic;}
 .total-hours span.hours-int { font-size: 120%; }
 
 .autoscroll {overflow-x: auto; padding:1px; margin-bottom: 1.2em;}
-#user_login, #user_firstname, #user_lastname, #user_mail, #my_account_form select, #user_form select, #user_identity_url { width: 90%; }
+#user_login, #user_firstname, #user_lastname, #user_mail, #my_account_form select, #user_form select { width: 90%; }
 
 #workflow_copy_form select { width: 200px; }
 
@@ -403,7 +403,7 @@ p.pagination {margin-top:8px;}
 /***** Tabular forms ******/
 .tabular p{
 margin: 0;
-padding: 3px 0 3px 0;
+padding: 5px 0 8px 0;
 padding-left: 180px; /* width of left column containing the label elements */
 height: 1%;
 clear:left;
@@ -460,6 +460,9 @@ input#time_entry_comments { width: 90%;}
 
 .settings.enabled_scm table {width:100%}
 .settings.enabled_scm td.scm_name{ font-weight: bold; }
+.tabular.settings.enabled_scm table {width:100%}
+.tabular.settings.enabled_scm td.scm_name{ font-weight: bold; }
+.tabular.settings.enabled_scm p.scm_config{ padding-left: 8px; font-style:italic;}
 
 fieldset.settings label { display: block; }
 fieldset#notified_events .parent { padding-left: 20px; }
@@ -537,6 +540,7 @@ div.flash.warning {
     color: #A6750C;
 }
 
+span.error {padding-left:20px; background:url(../images/exclamation.png) no-repeat 0 50%;}
 #errorExplanation ul { font-size: 0.9em;}
 #errorExplanation h2, #errorExplanation p { display: none; }
 
@@ -552,6 +556,7 @@ font-weight:bold;
 text-align:center;
 padding:0.6em;
 z-index:100;
+filter:alpha(opacity=50);
 opacity: 0.5;
 }
 
