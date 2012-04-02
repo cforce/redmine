@@ -1,0 +1,134 @@
+// ----------------------------------------------------------------------------
+// Image paste support for google chrome on wiki pages 
+// https://github.com/a-ono/redmine_ckeditor/issues/11
+
+//mime helpers
+function mimeBoundary() { return "MULTIPARTMIME--------------" + (new Date).getTime(); }
+function buildMultipartMimeMessage(elements, boundary) {
+    var CRLF = "\r\n";
+    var parts = elements.map(function(element) {
+        if (element.type == "file") {
+            return (
+                'Content-Disposition: form-data; ' +
+                'name="' + element.name + '"; ' +
+                'filename="'+ element.filename + '"' + CRLF +
+                "Content-Type: " + (element.contentType || "application/octet-stream") +
+                CRLF + CRLF +
+                element.value + CRLF
+            );
+        } else {
+            return (
+                'Content-Disposition: form-data; ' +
+                'name="' + element.name + '"' + CRLF + CRLF +
+                element.value + CRLF
+            );
+        }
+    });
+
+    return (
+        "--" + boundary + CRLF +
+        parts.join("--" + boundary + CRLF) +
+        "--" + boundary + "--" + CRLF
+    );
+}
+
+Event.observe(document, "dom:loaded", function() {
+    var isChrome12 = (parseInt( ( window.navigator.appVersion.match(/Chrome\/(\d+)\./) || [0] )[1]) >= 12)
+    var isWikiEdit = window.location.href.indexOf("/wiki") != -1 && window.location.href.indexOf("/edit") != -1;
+    if(isChrome12 && isWikiEdit) {
+        //patch chrome to support send as binary...
+        XMLHttpRequest.prototype.sendAsBinary = XMLHttpRequest.prototype.sendAsBinary || function(datastr) {
+            var ui8a = new Uint8Array(datastr.length);
+            for (var i = 0; i < datastr.length; i++)
+                ui8a[i] = (datastr.charCodeAt(i) & 0xff);
+            this.send(ui8a.buffer);
+        }
+
+        CKEDITOR.on('instanceCreated', function (e) { e.editor.on("instanceReady", function(e){ BindEditorPaste(e.editor) }); });
+    }
+
+});
+
+function BindEditorPaste(editor){
+    var clipboardFilename = null;
+    var xhr = new XMLHttpRequest();
+    xhr.onreadystatechange = function(){
+        if (xhr.readyState != 4 || xhr.status != 200)
+            return;
+
+        var responseHtml = xhr.responseText || "";
+
+        //try to find the domain rooted url to the image so we can insert it
+        var match = new RegExp("href=\"(.*)/"+clipboardFilename.replace(".","\\.")).exec(responseHtml);
+        if(match != null){
+            editor.insertHtml("<img src='"+match[1]+"/"+clipboardFilename+"' alt='"+clipboardFilename+"' title='"+clipboardFilename+"' />");
+        } else {
+            editor.insertHtml("<img src='"+clipboardFilename+"' alt='"+clipboardFilename+"' title='"+clipboardFilename+"' />");
+        }
+    }
+
+    editor.document.$.addEventListener("paste",function(evt) {
+        var found = false;
+        var items = (evt.originalEvent || evt).clipboardData.items;
+        for (var i = 0; i < items.length; i++) {
+            if (items[i].type.indexOf("image/") == -1)
+                continue;
+
+            found = true;
+
+            var authenticity_token = $$('[name="authenticity_token"]')[0].value;
+            var uploadUrl = window.location.href.replace("/edit","/add_attachment");
+            var description = "from clipboard";
+            clipboardFilename = "clipboard-"+(new Date()).getTime()+".png";
+
+            //use manual mime messages instead of using formdata because formdata doesn't support filename yet...
+            var reader = new FileReader();
+            reader.onload = function(){
+                var formFields = [
+                    {name:"attachments[1][file]",type:"file",contentType:"image/png",filename:clipboardFilename,value: reader.result},
+                    {name:"attachments[1][description]",value: description},
+                    {name:"authenticity_token",value:authenticity_token},
+                    {name:"commit",value:"Add"}
+                ];
+
+                var boundary = mimeBoundary()
+                xhr.open("POST", uploadUrl);
+                xhr.setRequestHeader("Content-Type", "multipart/form-data; boundary=" + boundary);
+                xhr.sendAsBinary(buildMultipartMimeMessage(formFields,boundary));
+            };
+            reader.readAsBinaryString(items[i].getAsFile());
+            /*
+            var formData = new FormData();
+            formData.append("attachments[1][file]", items[i].getAsFile(), clipboardFilename);
+            formData.append("attachments[1][description]", description);
+            formData.append("authenticity_token",authenticity_token)
+            formData.append("commit","Add");
+            xhr.open("POST", uploadUrl);
+            xhr.send(formData);
+            */
+        }
+
+        if (found) return false;
+    });
+}
+
+// ---------------------------------------------------------------------------- eof
+
+// jQuery slider js
+document.write("<script type=\"text/javascript\"> if (typeof jQuery!=\"undefined\" && $==jQuery) jQuery.noConflict(); </script>");
+document.write("<script type=\"text/javascript\">");
+document.write("jQuery(document).ready(function($){");
+document.write("$('.slide-out-div').tabSlideOut({");
+document.write("tabHandle: '.handle',");
+document.write("pathToTabImage: '/themes/dsv-slider/images/sidebar.png',");
+document.write("imageHeight: '122px',");
+document.write("imageWidth: '20px',  ");
+document.write("tabLocation: 'right',");
+document.write("speed: 300,");
+document.write("action: 'click',");
+document.write("topPos: 'absolut',");
+document.write("fixedPosition: true");
+document.write("});");
+document.write("});");
+
+document.write("</script>");

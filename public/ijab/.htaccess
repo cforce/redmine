@@ -1,0 +1,6 @@
+AddDefaultCharset UTF-8
+Options +MultiViews
+<IfModule mod_rewrite.c>
+        RewriteEngine On
+        RewriteRule http-bind/ https://infomine.dsv-gruppe.de:7443/http-bind/ [P]
+</IfModule>

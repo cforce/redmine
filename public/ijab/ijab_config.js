@@ -1,0 +1,69 @@
+var iJabConf =
+{
+    client_type:"xmpp",
+    app_type:"bar",
+    theme:"standard",
+    debug:false,
+    avatar_url:"http://samespace.anzsoft.com/portal_memberdata/portraits/{username}",
+    enable_roster_manage:true,
+    enable_talkto_stranger:true,
+    expand_bar_default:false,
+    enable_login_dialog:true,
+    hide_online_group:false,
+    disable_option_setting:false,
+    disable_msg_browser_prompt:false,
+    xmpp:{
+        domain:"infomine.dsv-gruppe.de",
+        http_bind:"/http-bind/",
+        host:"infomine.dsv-gruppe.de",
+        port:7443,
+        server_type:"Openfire",
+        auto_login:false,
+        none_roster:false,
+        get_roster_delay:true,
+        username_cookie_field:"username",
+        token_cookie_field:"SID",
+        anonymous_prefix:"",
+        max_reconnect:1,
+        enable_muc:true,
+        muc_servernode:"conference.infomine.dsv-gruppe.de",
+        vcard_search_servernode:"search.infomine.dsv-gruppe.de",
+        gateways:
+        [
+        	
+        ]       
+    },
+    disable_toolbox:false,
+    tools:
+    [
+    	{
+    		href:"http://www.google.com",
+    		target:"_blank",
+    		img:"http://www.google.cn/favicon.ico",
+    		text:"Google Search"
+    	},
+    	{
+    		href:"http://www.xing.com/",
+    		target:"_blank",
+    		img:"http://www.xing.com/favicon.ico",
+    		text:"Xing"
+    	}
+    ],
+    shortcuts:
+    [
+    	{
+    		href:"http://www.anzsoft.com/",
+    		target:"_blank",
+    		img:"http://www.anzsoft.com/favicon.ico",
+    		text:"Go to anzsoft"
+    	},
+    	{
+    		href:"http://www.google.com",
+    		target:"_blank",
+    		img:"http://www.google.cn/favicon.ico",
+    		text:"Google Search"
+    	}
+    ],
+    ijabcometd:{
+    }
+};
