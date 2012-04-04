@@ -23,8 +23,25 @@
 /tmp/test/*
 /vendor/rails
 *.rbc
-
 /.bundle
 /Gemfile.lock
 /Gemfile.local
-
+# Alle plugins nicht in das infomine repo einchecken außer die Standard Plugins, welche mit Redmine gebundlet sind. 
+# Die anderen Plugins werden über eigene OS Repositories (git, hg, svn) oder das DSV SVN gehostet
+/vendor/plugins/*
+!/vendor/plugins/acts_as_activity_provider
+!/vendor/plugins/acts_as_attachable
+!/vendor/plugins/acts_as_customizable
+!/vendor/plugins/acts_as_event
+!/vendor/plugins/acts_as_list
+!/vendor/plugins/acts_as_searchable
+!/vendor/plugins/acts_as_tree
+!/vendor/plugins/acts_as_versioned
+!/vendor/plugins/acts_as_watchable
+!/vendor/plugins/awesome_nested_set
+!/vendor/plugins/classic_pagination
+!/vendor/plugins/engines
+!/vendor/plugins/gravatar
+!/vendor/plugins/open_id_authentication
+!/vendor/plugins/prepend_engine_views
+!/vendor/plugins/rfpdf
