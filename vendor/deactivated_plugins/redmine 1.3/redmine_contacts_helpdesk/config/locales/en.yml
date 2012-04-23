@@ -1,0 +1,46 @@
+# English strings go here for Rails i18n
+en:
+  label_helpdesk: Helpdesk
+  label_helpdesk_answer_template: Notification answer email template
+  text_helpdesk_answer_macros: Avaliable macros %{macro}
+  label_is_send_mail: Send this note to contact by email
+  label_send_notification: Send notification
+  label_received_from: Received from
+  label_sent_to: Sent to
+  project_module_contacts_helpdesk: Helpdesk
+  permission_send_response: Send response to contact
+  permission_edit_helpdesk_settings: Edit hepldesk settings
+  label_not_create_contacts: Contacts whitelist 
+  field_created_contact_tags: Add tags after create
+  label_helpdesk_save_as_attachment: Save emails as attachments
+
+#1.0.2
+  label_helpdesk_assign_author: Set issue author from sender
+  
+#1.0.3
+  label_helpdesk_answered_status: Answered ticket status
+  label_helpdesk_reopen_status: Reopen ticket status
+  label_helpdesk_tracker: Ticket tracker
+  label_helpdesk_assigned_to: Assign ticket to
+  label_helpdesk_lifetime: Ticket lifetime
+  label_helpdesk_server_settings: Mail server settings
+  label_helpdesk_protocol: Protocol
+  label_helpdesk_host: Host
+  label_helpdesk_port: Port
+  label_helpdesk_username: User name
+  label_helpdesk_password: Password
+  label_helpdesk_ssl: SSL
+  label_helpdesk_imap_folder: IMAP folder
+  label_helpdesk_move_on_success: Move on success
+  label_helpdesk_move_on_failure: Move on failure
+  label_helpdesk_apop: APOP
+  label_helpdesk_delete_unprocessed: Delete unprocessed messages
+  label_helpdesk_first_answer_template: Template
+  label_helpdesk_test_connection: Test connection
+  label_helpdesk_get_mail: Get mail
+  label_helpdesk_get_mail_success: "Processed %{count} email(s)"
+  label_helpdesk_css: Email stylesheet (CSS) 
+  label_helpdesk_original: Original
+
+#1.0.4
+  label_helpdesk_blacklist: Blacklist emails

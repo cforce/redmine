@@ -1,0 +1,15 @@
+<%= render :partial => 'tag_list', :object => @contact.tags, :locals => {:editable => true} %>
+
+<div class="box" id="edit_tags_form" style="display:none;">
+  <% form_tag( {:controller => 'contacts', 
+  	:action => 'edit_tags', 
+  	:project_id => @project, 
+  	:id => @contact }, 
+  	:multipart => true ) do %>    
+	
+  	<%= render :partial => "contacts_tags/tags_form" %> 
+	
+  	<%= submit_tag l(:button_save) %>
+  	<%= link_to l(:button_cancel), {}, :onclick => "Element.hide('edit_tags_form'); Element.show('tags_data'); return false;" %>
+  <% end %>
+</div>

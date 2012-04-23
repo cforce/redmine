@@ -1,0 +1,24 @@
+# German strings go here for Rails i18n
+de:
+  project_module_contacts_expenses: Aufwendungen
+
+  label_expense_plural: Aufwendungen
+  label_expense: Aufwand
+  label_expense_new: Neuer Aufwand
+  label_expense_edit: Aufwand bearbeiten
+  label_expense_status: Status
+  label_expense_status_draft: Entwurf
+  label_expense_status_new: Neu
+  label_expense_status_billed: berechnet
+  label_expense_status_paid: bezahlt
+  label_expense_created: Aufwand erstellt
+
+  field_expense_date: Datum
+  field_expense_contact: Kunde
+  field_expense_status: Status
+  field_expense_price: Betrag
+
+  permission_edit_own_expenses: Eigene Aufwendungen bearbeiten
+  permission_edit_expenses: Aufwendungen bearbeiten
+  permission_delete_expenses: Aufwendungen löschen
+  permission_view_expenses: Aufwendungen anzeigen

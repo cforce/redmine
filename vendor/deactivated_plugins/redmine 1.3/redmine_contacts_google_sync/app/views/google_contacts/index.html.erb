@@ -1,0 +1,124 @@
+<% html_title "#{l(:label_google_contact_plural)}" %>    
+
+<div class="contextual">     
+	<%= link_to l(:label_drop_token), {:controller => 'google_contacts', :action => 'drop_token', :project_id => @project}, :class => 'icon icon-link-break' %>
+</div>
+
+<h2><%= "#{l(:label_google_contact_plural)}" %></h2>
+
+<script type="text/javascript" charset="utf-8">
+  function toggleAllSelection(el) {
+  	var boxes = el.getElementsBySelector('input[type=checkbox]');
+  	var all_checked = true;
+  	for (i = 0; i < boxes.length; i++) { if (boxes[i].checked == false) { all_checked = false; } }
+  	for (i = 0; i < boxes.length; i++) {
+  		if (all_checked) {
+  			boxes[i].checked = false;
+        boxes[i].up('tr').removeClassName('context-menu-selection');
+  		} else if (boxes[i].checked == false) {
+  			boxes[i].checked = true;
+        boxes[i].up('tr').addClassName('context-menu-selection');
+  		}
+  	}
+  }
+
+  function toggleSelection(el) {
+   		if (el.checked == false) {
+        el.up('tr').removeClassName('context-menu-selection');
+  		} else if (el.checked == true) {
+        el.up('tr').addClassName('context-menu-selection');
+  		}
+  }
+  
+  
+</script>
+
+<div class="filters">   
+	<% form_tag(params, :id => "query_form") do %> 
+		<%= hidden_field_tag('project_id', @project.to_param) if @project %>   
+		<% no_filters = params[:search].blank? %>	
+	
+	<fieldset id="filters" class="collapsible <%= 'collapsed' if no_filters %>">
+		<legend onclick="toggleFieldset(this);"><%= l(:label_filter_plural) %></legend>
+		<div style="<%= 'display: none;' if no_filters %>">  
+			<p>  
+        <%= check_box_tag(:show_all, value = "1", checked = params[:show_all])  %><%= label_tag l(:label_contact_view_all)%>
+			</p>    
+
+			<p>  
+        <%= label_tag l(:label_search)%>
+				<%= text_field_tag(:search, params[:search], :size => "35")%> 
+			</p>    
+
+		</div>
+	</fieldset> 
+	<p class="buttons hide-when-print">
+
+		<%= link_to_remote l(:button_apply), 
+		{ :url => {},
+		:update => "contact_list",
+		:with => "Form.serialize('query_form')"    
+		}, :class => 'icon icon-checked' %>
+
+		<%= link_to l(:button_clear),
+		{:id => @project },
+		:method => :get,
+		:update => "contact_list",
+	    :class => 'icon icon-reload'  %>    
+	</p>                                                                    
+	<% end %>  
+
+</div>
+
+<% form_tag({:action => :import_contacts}) do -%>
+<%= hidden_field_tag('project_id', @project.to_param) if @project %>
+
+  <fieldset class="attributes box tabular">
+  <legend>
+    <%= l(:label_change_properties) %>
+    <!-- <small>(<%= link_to l(:label_more), {}, :onclick => 'Effect.toggle("contact_descr_fields", "appear", {duration:0.3}); return false;' %>)</small> -->
+  </legend>
+
+
+  <div>
+    <p id="add_tags">
+  	<label><%= l(:field_add_tags) %></label>
+  	<%= text_field_tag 'add_tag_list', "import #{Date.today}", :label => :field_contact_tag_names, :size => 10, :class => 'hol', :style => "display: none;" %>
+    </p>
+    <div id="add_tag_candidates" class="autocomplete"></div>
+    <%= javascript_tag "observeTagsField('#{url_for(:controller => 'auto_completes', :action => 'contact_tags', :project_id => @project)}', 'add_tag_list', 'add_tag_candidates')" %>
+  </div>
+
+
+  <div id="contact_descr_fields">
+  <p>
+  	<label><%= l(:label_assigned_to) %></label> 
+  	<%= select_tag('contact[assigned_to_id]', content_tag('option', l(:label_no_change_option), :value => '') +
+                                   content_tag('option', l(:label_nobody), :value => 'none') +
+                                   options_from_collection_for_select(@project.assignable_users, :id, :name)) %>
+  </p>
+
+  <!-- <% Contact.first.custom_field_values.each do |value| %>
+    <p>
+    <% value.value = '' %>
+      <%= custom_field_tag_with_label :contact, value %>
+    </p>
+  <% end unless Contact.first.blank? %> -->
+
+
+  </div>
+
+  </fieldset>
+
+
+  <div id="contact_list">
+    <%= render :partial => 'list' %>
+  </div>
+<% end %> <!-- form -->
+
+<% content_for :header_tags do %>
+	<%= javascript_include_tag :contacts, :plugin => 'redmine_contacts'  %>
+	<%= stylesheet_link_tag :contacts, :plugin => 'redmine_contacts' %>
+<% end %>
+
+<%= context_menu issues_context_menu_path %>

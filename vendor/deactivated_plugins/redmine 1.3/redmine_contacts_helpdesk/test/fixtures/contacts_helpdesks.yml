@@ -1,0 +1,15 @@
+# Read about fixtures at http://ar.rubyonrails.org/classes/Fixtures.html
+one:
+  id: 1
+  from_address: MyString
+  subject: MyString
+  template: MyText
+  tracker_id: 1
+  project_id: 1
+two:
+  id: 2
+  from_address: MyString
+  subject: MyString
+  template: MyText
+  tracker_id: 1
+  project_id: 1

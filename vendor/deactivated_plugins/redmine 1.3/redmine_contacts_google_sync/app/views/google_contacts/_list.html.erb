@@ -1,0 +1,60 @@
+
+<% unless @google_contacts.empty? %>
+  <table class="list boards">
+    <thead><tr>
+      <th class="checkbox hide-when-print"><%= link_to image_tag('toggle_check.png'), {}, :onclick => 'toggleAllSelection(Element.up(this, "form")); return false;',
+                                                         :title => "#{l(:button_check_all)}/#{l(:button_uncheck_all)}" %>
+      </th>
+      <th><%= l(:field_title) %></th>
+      <th><%= l(:field_contact_first_name) %></th>
+      <th><%= l(:field_contact_middle_name) %></th>
+      <th><%= l(:field_contact_last_name) %></th>
+      <th><%= l(:field_contact_company) %></th>
+      <th><%= l(:field_contact_job_title) %></th>
+      <th><%= l(:field_contact_phone) %></th>
+      <th><%= l(:field_contact_email) %></th>
+      <th><%= l(:field_contact_address) %></th>
+    </tr></thead>
+    <tbody>
+  <% @google_contacts.each do |contact| %>
+    <tr class="<%= cycle 'odd', 'even' %>">
+  	  <td class="checkbox hide-when-print"><%= check_box_tag("ids[]", contact[:id], false, :id => nil, :onclick => "toggleSelection(this)") %></td>
+      <td>
+        <%=h contact[:title] %>
+      </td>
+      <td>
+        <%=h contact[:first_name] %>
+      </td>
+      <td>
+        <%=h contact[:middle_name] %>
+      </td>
+      <td>
+        <%=h contact[:last_name] %>
+      </td>
+      <td>
+        <%=h contact[:company] %>
+      </td>
+      <td>
+        <%=h contact[:job_title] %>
+      </td>
+      <td>
+        <%= contact[:phones].split(', ').collect{|e| "<span style='white-space: nowrap;'>#{e} <br/><span>"} %>
+      </td>
+      <td>
+        <%= contact[:emails].split(', ').collect{|e| "<span style='white-space: nowrap;'>#{e} <br/><span>"} %>
+      </td>
+      <td>
+        <%=h contact[:address] %>
+      </td>
+    </tr>
+  <% end %>
+    </tbody>
+  </table>
+  <% if params[:show_all].blank? %>
+  <em style="float: right;"><%= l(:label_first_10_contacts) %></em>
+  <% end %>
+  
+  <%= submit_tag l(:button_import_contacts), :class => "small", :name => nil %>
+<% else %>
+  <p class="nodata"><%=l(:label_no_data)%></p>
+<% end %>

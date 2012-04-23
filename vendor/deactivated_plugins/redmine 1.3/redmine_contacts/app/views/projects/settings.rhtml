@@ -1,0 +1,23 @@
+<h2><%=l(:label_settings)%></h2>
+
+<%
+tabs = project_settings_tabs
+if @project.module_enabled?(:contacts_module) 
+  if User.current.allowed_to?(:manage_contacts, @project)
+  	tabs.push({ :name => 'contacts',
+  		:action => :manage_contacts,
+  		:partial => 'projects/contacts_settings',
+  		:label => :label_contact_plural })
+  	tabs.push({ :name => 'deals',
+  		:action => :manage_contacts,
+  		:partial => 'projects/deals_settings',
+  		:label => :label_deal_plural })
+
+	end	
+	
+  call_hook(:add_contacts_project_settings_tab, {:project => @project, :tabs => tabs})
+end
+%>
+<%= render_tabs tabs %>
+
+<% html_title(l(:label_settings)) -%>

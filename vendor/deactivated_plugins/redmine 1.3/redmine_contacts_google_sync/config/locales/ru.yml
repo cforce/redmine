@@ -1,0 +1,7 @@
+ru:
+  label_google_contact_plural: Контакты Google
+  button_import_contacts: Импортировать выбранные контакты
+  label_contact_google_sync: Импортировать контакты из Google
+  label_first_10_contacts: По умолчанию загружаются только первыйе 10 контактов, для того чтобы загрузить остальные воспользуйтесь фильтрами
+  label_drop_token: Отключиться от Google
+  label_import: Импорт

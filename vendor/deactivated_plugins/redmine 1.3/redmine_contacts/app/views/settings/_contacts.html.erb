@@ -1,0 +1,8 @@
+<% contacts_tabs = [{:name => 'general', :partial => 'settings/contacts_general', :label => :label_general},
+        {:name => 'tags', :partial => 'settings/contacts_tags', :label => :label_tags_plural},
+        {:name => 'deal_statuses', :partial => 'settings/contacts_deal_statuses', :label => :label_deal_status_plural}
+        ]   %>   
+
+<%= render_tabs contacts_tabs %>
+
+<% html_title(l(:label_settings), l(:label_contact_plural)) -%>  

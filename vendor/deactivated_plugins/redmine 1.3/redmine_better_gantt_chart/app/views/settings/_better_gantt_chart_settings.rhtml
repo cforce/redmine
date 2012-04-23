@@ -1,0 +1,13 @@
+<p>
+<label for="settings_work_on_weekends"><%= h l(:work_on_weekends_label) %>:</label>
+<%= check_box_tag('settings[work_on_weekends]', @settings['work_on_weekends'], @settings['work_on_weekends']) %>
+</p>
+<p>
+<strong><%= h l(:label_enabled) %></strong>: <%= h l(:description_enabled) %>
+<br /><strong><%= h l(:label_disabled) %></strong>: <%= h l(:description_disabled) %>
+</p>
+<p>
+<br />
+<label for="settings_smart_sorting"><%= h l(:smart_sorting_label) %>:</label>
+<%= check_box_tag('settings[smart_sorting]', @settings['smart_sorting'], @settings['smart_sorting']) %>
+</p>

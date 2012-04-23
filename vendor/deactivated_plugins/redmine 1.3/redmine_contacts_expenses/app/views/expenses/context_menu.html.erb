@@ -1,0 +1,13 @@
+<ul>
+
+	<% if @expense.present? %>
+		<li><%= context_menu_link l(:button_edit), {:controller => 'expenses', :action => 'edit', :id => @expense}, :class => 'icon-edit', :disabled => !@can[:edit] %></li>
+	<% else %>
+    <!-- <li><%= context_menu_link l(:button_edit), {:controller => 'expenses', :action => 'bulk_edit', :ids => @expenses.collect(&:id)},
+            :class => 'icon-edit', :disabled => !@can[:edit] %></li> -->
+	<% end %>	
+	
+   	 <li><%= context_menu_link l(:button_delete), {:controller => 'expenses', :action => 'bulk_destroy', :ids => @expenses.collect(&:id)},
+                            :method => :delete, :confirm => l(:text_are_you_sure), :class => 'icon-del', :disabled => !@can[:delete] %></li>
+</ul>
+

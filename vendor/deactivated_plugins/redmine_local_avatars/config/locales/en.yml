@@ -1,0 +1,9 @@
+# English strings go here
+en:
+  label_avatar: Avatar
+  message_avatar_uploaded: "Avatar uploaded successfully"
+  button_change_avatar:  Change your local avatar
+  are_you_sure_delete_avatar: Are you sure you want to delete your avatar?
+  avatar_deleted:  Avatar deleted
+  unable_to_delete_avatar:  Sorry.  There was an error deleting the avatar
+  avatar_picture_format_hint:  "Please choose a picture (.png, gif, jpg) with same size for height and width (best fit is 128 Pixel) and below 50 kb of size."

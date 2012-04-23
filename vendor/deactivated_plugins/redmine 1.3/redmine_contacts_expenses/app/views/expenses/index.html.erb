@@ -1,0 +1,54 @@
+<div class="contextual">
+  <%= link_to_if_authorized l(:label_expense_new), {:controller => 'expenses', :action => 'new', :project_id => @project}, :class => 'icon icon-add' %>
+</div>
+
+<h2><%= l(:label_expense_plural) %></h2>
+
+<div class="filters">   
+	<% form_tag({:contoller => "expenses", :action => "index"}, :method => :get,  :id => "query_form") do %> 
+		<%= hidden_field_tag('project_id', @project.to_param) if @project %>   
+		<% no_filters = expenses_is_no_filters %>	
+	
+	<fieldset id="filters" class="collapsible <%= 'collapsed' if no_filters %>">
+		<legend onclick="toggleFieldset(this);"><%= l(:label_filter_plural) %></legend>
+		<div style="<%= 'display: none;' if no_filters %>">  
+			<p>  
+			  <span class="filter-condition">        
+					<%= label_tag l(:label_expense_status) + " "  %>
+					<%= select_tag :status_id, collection_for_expense_status_for_select(params[:status_id]) %>
+        </span>
+        <span class="filter-condition">        
+          <%= label_tag l(:field_expense_date) + " "%>
+  				<%= select_tag 'period', options_for_period_select(params[:period]) %>
+        </span>
+        
+        <% if @project %>
+        <span class="filter-condition">        
+  				<%= label_tag l(:label_contact) + " "  %> 
+  				<%= select_tag :contact_id, options_for_select(@project.contacts.collect{|u| [u.name, u.id.to_s]}.insert(0, [""]),  params[:contact_id]) %>
+        </span>
+        <% end %>
+			</p>    
+
+		</div>
+	</fieldset> 
+	<p class="buttons hide-when-print">
+	  <%= link_to_function l(:button_apply), '$("query_form").submit();', :class => 'icon icon-checked' %>
+    <%= link_to l(:button_clear), { :set_filter => 1, :project_id => @project }, :class => 'icon icon-reload'  %>
+	</p>                                                                    
+	<% end %>  
+
+</div>
+
+<div id="contact_list" class="expense_list">  
+	<%= render :partial => 'list' %>
+</div>
+
+
+<% content_for :header_tags do %>
+	<%= stylesheet_link_tag :contacts_expenses, :plugin => 'redmine_contacts_expenses' %> 
+	<%= stylesheet_link_tag :contacts_invoices, :plugin => 'redmine_contacts_invoices' %> 
+	<%= stylesheet_link_tag :contacts, :plugin => 'redmine_contacts' %>
+	<meta name = "format-detection" content = "telephone=no">
+<% end %>
+

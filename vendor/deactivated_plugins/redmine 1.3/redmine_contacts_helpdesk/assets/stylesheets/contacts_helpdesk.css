@@ -1,0 +1,7 @@
+.icon-email-to { background-image: url(../images/email_go.png); }   
+.icon-email-from { background-image: url(../images/email_from.png); }   
+.icon-helpdesk { background-image: url(../images/user_comment.png); }  
+
+span.attachment img {
+	vertical-align: middle;
+}

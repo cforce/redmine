@@ -1,0 +1,57 @@
+# Polish strings go here for Rails i18n
+pl:
+  project_module_contacts_invoices: Faktury
+  
+  label_invoice_plural: Faktury
+  label_invoice: Faktura
+  label_invoice_new: Nowa faktura
+  label_invoice_edit: Edytuj fakturę
+  label_invoice_status: Status
+  label_invoice_status_draft: Szkic
+  label_invoice_status_sent: Wysłana
+  label_invoice_status_paid: Opłacona
+  label_invoice_lines: Pozycje faktury
+  label_invoice_percent: Procent
+  label_invoice_amount: Kwota
+  label_invoice_address: Adres
+  label_invoice_bill_to: Rachunek dla
+  label_invoice_company_representative: Przedstawiciel
+  label_invoice_company_name: Nazwa firmy
+  label_invoice_company_info: Dane firmy
+  label_invoice_bill_info: Dane rachunku
+  label_invoice_units: Jednostka
+  label_invoice_total: Suma
+  label_invoice_tax: Podatek
+  label_invoice_sub_amount: Podsuma
+  label_invoice_invoiced: Zafakturowane
+  label_invoice_add_line: Dodaj linię
+  label_invoice_overdue: Zaległa
+  label_invoice_last_number: 'Ostatni numer faktury to #%{number}'
+  
+  permission_edit_own_invoices: Edycja własnych faktur
+  permission_edit_invoices: Edycja faktur
+  permission_delete_invoices: Usuwanie faktur
+  permission_view_invoices: Wyświetlanie faktur
+
+  button_send_mail: Wyślij
+  button_print: Wydrukuj
+  button_invoice: Faktura
+
+  field_invoice_number: ID faktury
+  field_invoice_date: Data faktury
+  field_invoice_contact: Klient
+  field_invoice_due_date: Termin
+  field_invoice_amount: Ilość
+  field_invoice_discount: Zniżka
+  field_invoice_assigned_to: Przydzielona do
+  field_invoice_status: Status
+  field_invoice_currency: Waluta
+  
+  field_invoice_line_position: '#'
+  field_invoice_line_description: Opis
+  field_invoice_line_price: Cena jednostkowa
+  field_invoice_line_quantity: Ilość
+  field_invoice_line_tax: Podatek
+  field_invoice_line_tax_amount: Wartość podatku
+  field_invoice_line_total: Suma
+  field_invoice_line_units: Jednostka

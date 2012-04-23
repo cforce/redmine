@@ -1,0 +1,10 @@
+# German strings go here
+de:
+  label_avatar: Avatar
+  message_avatar_uploaded: "Avatar erfolgreich hochgeladen"
+  button_change_avatar:  Avatar anpassen
+  are_you_sure_delete_avatar: Wollen Sie den Avatar entfernen?
+  avatar_deleted:  Avatar entfernt.
+  unable_to_delete_avatar:  Leider is beim Löschen des Avatars ein Problem aufgetreten!
+  avatar_picture_format_hint: "Für eine optimale Darstellung wählen Sie bitte eine Bilddatei (.png, gif, jpg) mit gleichlangen Seiten (empfohlen sind 128 Pixel) und welche die Dateigröße von 50 kb nicht übersteigt."
+

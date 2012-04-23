@@ -1,0 +1,109 @@
+<h2><%= l(:label_bulk_edit_selected_contacts) %></h2>
+
+
+<div class="box" id="duplicates">                                  
+	<ul>   
+	    <% @contacts.each do |contact| %>   
+		<li>   
+			<%= avatar_to contact, :size => "16" %>	
+			<%= link_to_source contact %>, 
+			<%= h contact.job_title %>
+			<%= " #{l(:label_at_company)} " unless (contact.job_title.blank? or contact.company.blank?) %> 
+			<% if contact.contact_company %>
+				<%= link_to contact.contact_company.name, {:controller => 'contacts', :action => 'show', :id => contact.contact_company.id } %>
+			<% else %>
+				<%= h contact.company %> 
+			<% end %>
+			<%= "(#{l(:field_contact_tag_names)}: #{contact.tag_list})" if contact.tags.any? %>
+        </li>   			
+		<% end %>    
+	</ul>  
+</div>
+
+
+<% form_tag(:action => 'bulk_update') do %>
+<%= @contacts.collect {|i| hidden_field_tag('ids[]', i.id)}.join %>
+<div class="box tabular">
+<fieldset class="attributes">
+<legend><%= l(:label_change_properties) %></legend>
+
+<p>
+	<label><%= l(:field_company) %></label>
+	<%= text_field_tag('contact[company]', '') %>
+</p>
+
+<p>
+	<label><%= l(:field_contact_job_title) %>/<%= l(:field_company_field) %></label>
+	<%= text_field_tag('contact[job_title]', '') %>
+</p>
+
+<% @contacts.first.custom_field_values.each do |value| %>
+  <p>
+	<% value.value = '' %>
+    <%= custom_field_tag_with_label :contact, value %>
+  </p>
+<% end -%>
+
+
+<p>
+	<label><%= l(:label_assigned_to) %></label> 
+	<%= select_tag('contact[assigned_to_id]', content_tag('option', l(:label_no_change_option), :value => '') +
+                                 content_tag('option', l(:label_nobody), :value => 'none') +
+                                 options_from_collection_for_select(@assignables, :id, :name)) %>
+</p>
+
+</fieldset>
+
+<fieldset class="attributes">
+<legend><%= l(:label_tags_plural) %></legend>
+
+<div>
+  <p id="add_tags">
+	<label><%= l(:field_add_tags) %></label>
+	<%= text_field_tag 'add_tag_list', '', :label => :field_contact_tag_names, :size => 10, :class => 'hol', :style => "display: none;" %>
+  </p>
+  <div id="add_tag_candidates" class="autocomplete"></div>
+  <%= javascript_tag "observeTagsField('#{url_for(:controller => 'auto_completes', :action => 'contact_tags', :project_id => @project)}', 'add_tag_list', 'add_tag_candidates')" %>
+</div>
+<div>
+  <p id="delete_tags">
+	<label><%= l(:field_delete_tags) %></label>
+	<%= text_field_tag 'delete_tag_list', '', :label => :field_contact_tag_names, :size => 10, :class => 'hol', :style => "display: none;" %>
+  </p>
+  <div id="delete_tag_candidates" class="autocomplete"></div>
+  <%= javascript_tag "observeTagsField('#{url_for(:controller => 'auto_completes', :action => 'contact_tags', :project_id => @project)}', 'delete_tag_list', 'delete_tag_candidates')" %>
+</div>
+</fieldset>
+
+<% if @add_projects.any? %>
+<fieldset class="attributes">
+<legend><%= l(:label_project_plural) %></legend>
+  <p>
+  	<label><%= l(:label_add_into) %></label> 
+  	<%= select_tag 'add_projects_list[]', content_tag('option', l(:label_no_change_option), :value => '', :selected => 'selected') + project_tree_options_for_select(@add_projects), :multiple => false %>
+  </p>
+
+  <p>
+  	<label><%= l(:label_delete_from) %></label> 
+  	<%= select_tag 'delete_projects_list[]', content_tag('option', l(:label_no_change_option), :value => '', :selected => 'selected') + project_tree_options_for_select(@add_projects), :multiple => false %>
+  </p>
+
+  
+</fieldset>
+<% end %>
+
+
+
+<fieldset><legend><%= l(:field_notes) %></legend>
+<%= text_area_tag 'note[content]', '', :cols => 60, :rows => 10, :class => 'wiki-edit' %>
+<%= wikitoolbar_for 'note_content' %>
+</fieldset>
+</div>
+
+<p><%= submit_tag l(:button_submit) %></p>
+<% end %>
+
+<% content_for :header_tags do %>
+	<%= javascript_include_tag :contacts, :plugin => 'redmine_contacts'  %>
+	<%= stylesheet_link_tag :contacts, :plugin => 'redmine_contacts' %>
+<% end %>
