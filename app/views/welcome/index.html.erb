@@ -1,7 +1,20 @@
+<!-- Home label ist störend, deswegen entfernt
 <h2><%= l(:label_home) %></h2>
+-->
 
 <div class="splitcontentleft">
   <%= textilizable Setting.welcome_text %>
+<!-- div "news box" nach div "splitcontentright" verschoben  #1 -->  
+  <%= call_hook(:view_welcome_index_left, :projects => @projects) %>
+</div>
+
+<!-- div "news box" nach div "splitcontentright" verschoben  #2 -->  
+<div class="splitcontentright">
+	<div style="text-align: right; margin: 0 0 5px 0;">
+		<a href="/activity?show_issues=1&amp;show_changesets=1&amp;show_news=1&amp;show_documents=1&amp;show_files=1&amp;show_messages=1&amp;show_time_entries=1&amp;show_contacts=1&amp;show_hudson=1&amp;with_subprojects=0&amp;with_subprojects=1">Aktivit&auml;t</a>
+		| <a href="/issues">alle Tickets</a>
+		| <a href="/activity?show_wiki_edits=1">letzte &Auml;nderungen</a>
+	</div>
   <% if @news.any? %>
   <div class="news box">
   <h3><%=l(:label_news_latest)%></h3>
@@ -9,10 +22,12 @@
     <%= link_to l(:label_news_view_all), :controller => 'news' %>
   </div>
   <% end %>
+<!-- div "news box" nach div "splitcontentright" verschoben  #3 -->    
   <%= call_hook(:view_welcome_index_left, :projects => @projects) %>
 </div>
 
 <div class="splitcontentright">
+-->
     <% if @projects.any? %>
   <div class="projects box">
   <h3><%=l(:label_project_latest)%></h3>

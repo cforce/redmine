@@ -56,7 +56,11 @@ Rails::Initializer.run do |config|
 
   config.gem 'rubytree', :lib => 'tree'
   config.gem 'coderay', :version => '~>1.0.0'
+  # Reihenfolge der Plugin festlegen
+  # Damit die Fusszeile mit den Summen der Zeiten nicht zwischen cvs,AtomPdf Export und XLS rutscht, muss erst das redmine_xls_export
+  # Plugin und dann das redmine_spent_time_column Plugin geladen werden
 
+  config.plugins = [ :all, :redmine_xls_export, :redmine_spent_time_column]  
   # Load any local configuration that is kept out of source control
   # (e.g. gems, patches).
   if File.exists?(File.join(File.dirname(__FILE__), 'additional_environment.rb'))
