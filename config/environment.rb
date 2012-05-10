@@ -61,6 +61,9 @@ Rails::Initializer.run do |config|
   # Plugin und dann das redmine_spent_time_column Plugin geladen werden
 
   config.plugins = [ :all, :redmine_xls_export, :redmine_spent_time_column]  
+  # config.plugins = [ :all, :redmine_boards_watchers]  
+
+
   # Load any local configuration that is kept out of source control
   # (e.g. gems, patches).
   if File.exists?(File.join(File.dirname(__FILE__), 'additional_environment.rb'))

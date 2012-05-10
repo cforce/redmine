@@ -1,8 +1,0 @@
-# English strings go here for Rails i18n
-en:
-  label_google_contact_plural: "Google contacts"
-  button_import_contacts: Import selected contacts
-  label_contact_google_sync: Import from Google contacts
-  label_first_10_contacts: For defaults from Google requested only first 10 contacs, to show all contacts, use filters
-  label_drop_token: Disconnect from Google
-  label_import: Import
