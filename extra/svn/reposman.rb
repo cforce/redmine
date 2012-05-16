@@ -117,7 +117,8 @@ module SCM
 
   module Subversion
     def self.create(path)
-      system_or_raise "svnadmin create #{path}"
+      #system_or_raise "svnadmin create #{path}"
+	system_or_raise "/opt/dsvskripte/svn_create_project.sh #{path}"
     end
   end
 
