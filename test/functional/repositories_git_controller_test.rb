@@ -16,12 +16,10 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 require File.expand_path('../../test_helper', __FILE__)
-require 'repositories_controller'
-
-# Re-raise errors caught by the controller.
-class RepositoriesController; def rescue_action(e) raise e end; end
 
 class RepositoriesGitControllerTest < ActionController::TestCase
+  tests RepositoriesController
+
   fixtures :projects, :users, :roles, :members, :member_roles,
            :repositories, :enabled_modules
 
@@ -29,7 +27,7 @@ class RepositoriesGitControllerTest < ActionController::TestCase
   REPOSITORY_PATH.gsub!(/\//, "\\") if Redmine::Platform.mswin?
   PRJ_ID     = 3
   CHAR_1_HEX = "\xc3\x9c"
-  NUM_REV = 21
+  NUM_REV = 28
 
   ## Git, Mercurial and CVS path encodings are binary.
   ## Subversion supports URL encoding for path.
@@ -43,9 +41,6 @@ class RepositoriesGitControllerTest < ActionController::TestCase
     @ruby19_non_utf8_pass =
       (RUBY_VERSION >= '1.9' && Encoding.default_external.to_s != 'UTF-8')
 
-    @controller = RepositoriesController.new
-    @request    = ActionController::TestRequest.new
-    @response   = ActionController::TestResponse.new
     User.current = nil
     @project    = Project.find(PRJ_ID)
     @repository = Repository::Git.create(
@@ -62,7 +57,56 @@ class RepositoriesGitControllerTest < ActionController::TestCase
     Setting.default_language = 'en'
   end
 
+  def test_create_and_update
+    @request.session[:user_id] = 1
+    assert_difference 'Repository.count' do
+      post :create, :project_id => 'subproject1',
+                    :repository_scm => 'Git',
+                    :repository => {
+                       :url => '/test',
+                       :is_default => '0',
+                       :identifier => 'test-create',
+                       :extra_report_last_commit => '1',
+                     }
+    end
+    assert_response 302
+    repository = Repository.first(:order => 'id DESC')
+    assert_kind_of Repository::Git, repository
+    assert_equal '/test', repository.url
+    assert_equal true, repository.extra_report_last_commit
+
+    put :update, :id => repository.id,
+                 :repository => {
+                     :extra_report_last_commit => '0',
+                     :identifier => 'test-update',
+                 }
+    assert_response 302
+    repo2 = Repository.find(repository.id)
+    assert_equal 'test-update', repo2.identifier
+    assert_equal false, repo2.extra_report_last_commit
+  end
+
   if File.directory?(REPOSITORY_PATH)
+    ## Ruby uses ANSI api to fork a process on Windows.
+    ## Japanese Shift_JIS and Traditional Chinese Big5 have 0x5c(backslash) problem
+    ## and these are incompatible with ASCII.
+    ## Git for Windows (msysGit) changed internal API from ANSI to Unicode in 1.7.10
+    ## http://code.google.com/p/msysgit/issues/detail?id=80
+    ## So, Latin-1 path tests fail on Japanese Windows
+    WINDOWS_PASS = (Redmine::Platform.mswin? &&
+                         Redmine::Scm::Adapters::GitAdapter.client_version_above?([1, 7, 10]))
+    WINDOWS_SKIP_STR = "TODO: This test fails in Git for Windows above 1.7.10"
+
+    def test_get_new
+      @request.session[:user_id] = 1
+      @project.repository.destroy
+      get :new, :project_id => 'subproject1', :repository_scm => 'Git'
+      assert_response :success
+      assert_template 'new'
+      assert_kind_of Repository::Git, assigns(:repository)
+      assert assigns(:repository).new_record?
+    end
+
     def test_browse_root
       assert_equal 0, @repository.changesets.count
       @repository.fetch_changesets
@@ -129,7 +173,7 @@ class RepositoriesGitControllerTest < ActionController::TestCase
       @repository.fetch_changesets
       @project.reload
       assert_equal NUM_REV, @repository.changesets.count
-      get :show, :id => PRJ_ID, :path => ['images']
+      get :show, :id => PRJ_ID, :path => repository_path_hash(['images'])[:param]
       assert_response :success
       assert_template 'show'
       assert_not_nil assigns(:entries)
@@ -147,7 +191,7 @@ class RepositoriesGitControllerTest < ActionController::TestCase
       @repository.fetch_changesets
       @project.reload
       assert_equal NUM_REV, @repository.changesets.count
-      get :show, :id => PRJ_ID, :path => ['images'],
+      get :show, :id => PRJ_ID, :path => repository_path_hash(['images'])[:param],
           :rev => '7234cb2750b63f47bff735edc50a1c0a433c2518'
       assert_response :success
       assert_template 'show'
@@ -158,14 +202,16 @@ class RepositoriesGitControllerTest < ActionController::TestCase
     end
 
     def test_changes
-      get :changes, :id => PRJ_ID, :path => ['images', 'edit.png']
+      get :changes, :id => PRJ_ID,
+          :path => repository_path_hash(['images', 'edit.png'])[:param]
       assert_response :success
       assert_template 'changes'
       assert_tag :tag => 'h2', :content => 'edit.png'
     end
 
     def test_entry_show
-      get :entry, :id => PRJ_ID, :path => ['sources', 'watchers_controller.rb']
+      get :entry, :id => PRJ_ID,
+          :path => repository_path_hash(['sources', 'watchers_controller.rb'])[:param]
       assert_response :success
       assert_template 'entry'
       # Line 19
@@ -178,13 +224,16 @@ class RepositoriesGitControllerTest < ActionController::TestCase
     def test_entry_show_latin_1
       if @ruby19_non_utf8_pass
         puts_ruby19_non_utf8_pass()
+      elsif WINDOWS_PASS
+        puts WINDOWS_SKIP_STR
       elsif JRUBY_SKIP
         puts JRUBY_SKIP_STR
       else
         with_settings :repositories_encodings => 'UTF-8,ISO-8859-1' do
           ['57ca437c', '57ca437c0acbbcb749821fdf3726a1367056d364'].each do |r1|
             get :entry, :id => PRJ_ID,
-                :path => ['latin-1-dir', "test-#{@char_1}.txt"], :rev => r1
+                :path => repository_path_hash(['latin-1-dir', "test-#{@char_1}.txt"])[:param],
+                :rev => r1
             assert_response :success
             assert_template 'entry'
             assert_tag :tag => 'th',
@@ -198,7 +247,8 @@ class RepositoriesGitControllerTest < ActionController::TestCase
     end
 
     def test_entry_download
-      get :entry, :id => PRJ_ID, :path => ['sources', 'watchers_controller.rb'],
+      get :entry, :id => PRJ_ID,
+          :path => repository_path_hash(['sources', 'watchers_controller.rb'])[:param],
           :format => 'raw'
       assert_response :success
       # File content
@@ -206,7 +256,8 @@ class RepositoriesGitControllerTest < ActionController::TestCase
     end
 
     def test_directory_entry
-      get :entry, :id => PRJ_ID, :path => ['sources']
+      get :entry, :id => PRJ_ID,
+          :path => repository_path_hash(['sources'])[:param]
       assert_response :success
       assert_template 'show'
       assert_not_nil assigns(:entry)
@@ -329,7 +380,8 @@ class RepositoriesGitControllerTest < ActionController::TestCase
     end
 
     def test_annotate
-      get :annotate, :id => PRJ_ID, :path => ['sources', 'watchers_controller.rb']
+      get :annotate, :id => PRJ_ID,
+          :path => repository_path_hash(['sources', 'watchers_controller.rb'])[:param]
       assert_response :success
       assert_template 'annotate'
       # Line 24, changeset 2f9c0091
@@ -361,14 +413,15 @@ class RepositoriesGitControllerTest < ActionController::TestCase
       @project.reload
       assert_equal NUM_REV, @repository.changesets.count
       get :annotate, :id => PRJ_ID, :rev => 'deff7',
-          :path => ['sources', 'watchers_controller.rb']
+          :path => repository_path_hash(['sources', 'watchers_controller.rb'])[:param]
       assert_response :success
       assert_template 'annotate'
       assert_tag :tag => 'h2', :content => /@ deff712f/
     end
 
     def test_annotate_binary_file
-      get :annotate, :id => PRJ_ID, :path => ['images', 'edit.png']
+      get :annotate, :id => PRJ_ID,
+          :path => repository_path_hash(['images', 'edit.png'])[:param]
       assert_response 500
       assert_tag :tag => 'p', :attributes => { :id => /errorExplanation/ },
                               :content => /cannot be annotated/
@@ -376,12 +429,16 @@ class RepositoriesGitControllerTest < ActionController::TestCase
 
     def test_annotate_error_when_too_big
       with_settings :file_max_size_displayed => 1 do
-        get :annotate, :id => PRJ_ID, :path => ['sources', 'watchers_controller.rb'], :rev => 'deff712f'
+        get :annotate, :id => PRJ_ID,
+            :path => repository_path_hash(['sources', 'watchers_controller.rb'])[:param],
+            :rev => 'deff712f'
         assert_response 500
         assert_tag :tag => 'p', :attributes => { :id => /errorExplanation/ },
                                 :content => /exceeds the maximum text file size/
 
-        get :annotate, :id => PRJ_ID, :path => ['README'], :rev => '7234cb2'
+        get :annotate, :id => PRJ_ID,
+            :path => repository_path_hash(['README'])[:param],
+            :rev => '7234cb2'
         assert_response :success
         assert_template 'annotate'
       end
@@ -390,13 +447,16 @@ class RepositoriesGitControllerTest < ActionController::TestCase
     def test_annotate_latin_1
       if @ruby19_non_utf8_pass
         puts_ruby19_non_utf8_pass()
+      elsif WINDOWS_PASS
+        puts WINDOWS_SKIP_STR
       elsif JRUBY_SKIP
         puts JRUBY_SKIP_STR
       else
         with_settings :repositories_encodings => 'UTF-8,ISO-8859-1' do
           ['57ca437c', '57ca437c0acbbcb749821fdf3726a1367056d364'].each do |r1|
             get :annotate, :id => PRJ_ID,
-                :path => ['latin-1-dir', "test-#{@char_1}.txt"], :rev => r1
+                :path => repository_path_hash(['latin-1-dir', "test-#{@char_1}.txt"])[:param],
+                :rev => r1
             assert_tag :tag => 'th',
                        :content => '1',
                        :attributes => { :class => 'line-num' },
@@ -438,7 +498,9 @@ class RepositoriesGitControllerTest < ActionController::TestCase
       @project.reload
       assert_equal NUM_REV, @repository.changesets.count
 
-      get :destroy, :id => PRJ_ID
+      assert_difference 'Repository.count', -1 do
+        delete :destroy, :id => @repository.id
+      end
       assert_response 302
       @project.reload
       assert_nil @project.repository
@@ -446,27 +508,19 @@ class RepositoriesGitControllerTest < ActionController::TestCase
 
     def test_destroy_invalid_repository
       @request.session[:user_id] = 1 # admin
-      assert_equal 0, @repository.changesets.count
-      @repository.fetch_changesets
-      @project.reload
-      assert_equal NUM_REV, @repository.changesets.count
-
-      get :destroy, :id => PRJ_ID
-      assert_response 302
-      @project.reload
-      assert_nil @project.repository
-
-      @repository = Repository::Git.create(
+      @project.repository.destroy
+      @repository = Repository::Git.create!(
                       :project       => @project,
                       :url           => "/invalid",
                       :path_encoding => 'ISO-8859-1'
                       )
-      assert @repository
       @repository.fetch_changesets
       @repository.reload
       assert_equal 0, @repository.changesets.count
 
-      get :destroy, :id => PRJ_ID
+      assert_difference 'Repository.count', -1 do
+        delete :destroy, :id => @repository.id
+      end
       assert_response 302
       @project.reload
       assert_nil @project.repository

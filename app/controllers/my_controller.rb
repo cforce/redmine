@@ -35,9 +35,6 @@ class MyController < ApplicationController
                       'right' => ['issuesreportedbyme']
                    }.freeze
 
-  verify :xhr => true,
-         :only => [:add_block, :remove_block, :order_blocks]
-
   def index
     page
     render :action => 'page'
@@ -65,6 +62,24 @@ class MyController < ApplicationController
         redirect_to :action => 'account'
         return
       end
+    end
+  end
+
+  # Destroys user's account
+  def destroy
+    @user = User.current
+    unless @user.own_account_deletable?
+      redirect_to :action => 'account'
+      return
+    end
+
+    if request.post? && params[:confirm]
+      @user.destroy
+      if @user.destroyed?
+        logout_user
+        flash[:notice] = l(:notice_account_deleted)
+      end
+      redirect_to home_path
     end
   end
 

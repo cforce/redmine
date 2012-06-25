@@ -31,19 +31,32 @@ class ApplicationController < ActionController::Base
     super
     cookies.delete(:autologin)
   end
-  # Remove broken cookie after upgrade from 0.8.x (#4292)
-  # See https://rails.lighthouseapp.com/projects/8994/tickets/3360
-  # TODO: remove it when Rails is fixed
-  before_filter :delete_broken_cookies
-  def delete_broken_cookies
-    if cookies['_redmine_session'] && cookies['_redmine_session'] !~ /--/
-      cookies.delete '_redmine_session'
-      redirect_to home_path
-      return false
+
+  # FIXME: Remove this when all of Rack and Rails have learned how to
+  # properly use encodings
+  before_filter :params_filter
+
+  def params_filter
+    if RUBY_VERSION >= '1.9' && defined?(Rails) && Rails::VERSION::MAJOR < 3
+      self.utf8nize!(params)
     end
   end
 
-  before_filter :user_setup, :check_if_login_required, :set_localization
+  def utf8nize!(obj)
+    if obj.frozen?
+      obj
+    elsif obj.is_a? String
+      obj.respond_to?(:force_encoding) ? obj.force_encoding("UTF-8") : obj
+    elsif obj.is_a? Hash
+      obj.each {|k, v| obj[k] = self.utf8nize!(v)}
+    elsif obj.is_a? Array
+      obj.each {|v| self.utf8nize!(v)}
+    else
+      obj
+    end
+  end
+
+  before_filter :session_expiration, :user_setup, :check_if_login_required, :set_localization
   filter_parameter_logging :password
 
   rescue_from ActionController::InvalidAuthenticityToken, :with => :invalid_authenticity_token
@@ -55,6 +68,38 @@ class ApplicationController < ActionController::Base
 
   Redmine::Scm::Base.all.each do |scm|
     require_dependency "repository/#{scm.underscore}"
+  end
+
+  def session_expiration
+    if session[:user_id]
+      if session_expired? && !try_to_autologin
+        reset_session
+        flash[:error] = l(:error_session_expired)
+        redirect_to signin_url
+      else
+        session[:atime] = Time.now.utc.to_i
+      end
+    end
+  end
+
+  def session_expired?
+    if Setting.session_lifetime?
+      unless session[:ctime] && (Time.now.utc.to_i - session[:ctime].to_i <= Setting.session_lifetime.to_i * 60)
+        return true
+      end
+    end
+    if Setting.session_timeout?
+      unless session[:atime] && (Time.now.utc.to_i - session[:atime].to_i <= Setting.session_timeout.to_i * 60)
+        return true
+      end
+    end
+    false
+  end
+
+  def start_user_session(user)
+    session[:user_id] = user.id
+    session[:ctime] = Time.now.utc.to_i
+    session[:atime] = Time.now.utc.to_i
   end
 
   def user_setup
@@ -70,10 +115,7 @@ class ApplicationController < ActionController::Base
     if session[:user_id]
       # existing session
       (User.active.find(session[:user_id]) rescue nil)
-    elsif cookies[:autologin] && Setting.autologin?
-      # auto-login feature starts a new session
-      user = User.try_to_autologin(cookies[:autologin])
-      session[:user_id] = user.id if user
+    elsif user = try_to_autologin
       user
     elsif params[:format] == 'atom' && params[:key] && request.get? && accept_rss_auth?
       # RSS key authentication does not start a session
@@ -91,14 +133,35 @@ class ApplicationController < ActionController::Base
     end
   end
 
+  def try_to_autologin
+    if cookies[:autologin] && Setting.autologin?
+      # auto-login feature starts a new session
+      user = User.try_to_autologin(cookies[:autologin])
+      if user
+        reset_session
+        start_user_session(user)
+      end
+      user
+    end
+  end
+
   # Sets the logged in user
   def logged_user=(user)
     reset_session
     if user && user.is_a?(User)
       User.current = user
-      session[:user_id] = user.id
+      start_user_session(user)
     else
       User.current = User.anonymous
+    end
+  end
+
+  # Logs out current user
+  def logout_user
+    if User.current.logged?
+      cookies.delete :autologin
+      Token.delete_all(["user_id = ? AND action = ?", User.current.id, 'autologin'])
+      self.logged_user = nil
     end
   end
 
@@ -236,20 +299,11 @@ class ApplicationController < ActionController::Base
     render_404
   end
 
-  # Check if project is unique before bulk operations
-  def check_project_uniqueness
-    unless @project
-      # TODO: let users bulk edit/move/destroy issues from different projects
-      render_error 'Can not bulk edit/move/destroy issues from different projects'
-      return false
-    end
-  end
-
   # make sure that the user is a member of the project (or admin) if project is private
   # used as a before_filter for actions that do not require any particular permission on the project
   def check_project_privacy
     if @project && @project.active?
-      if @project.is_public? || User.current.member_of?(@project) || User.current.admin?
+      if @project.visible?
         true
       else
         deny_access
@@ -349,18 +403,6 @@ class ApplicationController < ActionController::Base
            :content_type => 'application/atom+xml'
   end
 
-  # TODO: remove in Redmine 1.4
-  def self.accept_key_auth(*actions)
-    ActiveSupport::Deprecation.warn "ApplicationController.accept_key_auth is deprecated and will be removed in Redmine 1.4. Use accept_rss_auth (or accept_api_auth) instead."
-    accept_rss_auth(*actions)
-  end
-
-  # TODO: remove in Redmine 1.4
-  def accept_key_auth_actions
-    ActiveSupport::Deprecation.warn "ApplicationController.accept_key_auth_actions is deprecated and will be removed in Redmine 1.4. Use accept_rss_auth (or accept_api_auth) instead."
-    self.class.accept_rss_auth
-  end
-
   def self.accept_rss_auth(*actions)
     if actions.any?
       write_inheritable_attribute('accept_rss_auth_actions', actions)
@@ -457,9 +499,9 @@ class ApplicationController < ActionController::Base
   # Returns the API key present in the request
   def api_key_from_request
     if params[:key].present?
-      params[:key]
+      params[:key].to_s
     elsif request.headers["X-Redmine-API-Key"].present?
-      request.headers["X-Redmine-API-Key"]
+      request.headers["X-Redmine-API-Key"].to_s
     end
   end
 
@@ -492,16 +534,13 @@ class ApplicationController < ActionController::Base
   end
 
   # Renders API response on validation failure
-  def render_validation_errors(object)
-    options = { :status => :unprocessable_entity, :layout => false }
-    options.merge!(case params[:format]
-      when 'xml';  { :xml =>  object.errors }
-      when 'json'; { :json => {'errors' => object.errors} } # ActiveResource client compliance
-      else
-        raise "Unknown format #{params[:format]} in #render_validation_errors"
-      end
-    )
-    render options
+  def render_validation_errors(objects)
+    if objects.is_a?(Array)
+      @error_messages = objects.map {|object| object.errors.full_messages}.flatten
+    else
+      @error_messages = objects.errors.full_messages
+    end
+    render :template => 'common/error_messages.api', :status => :unprocessable_entity, :layout => false
   end
 
   # Overrides #default_template so that the api template

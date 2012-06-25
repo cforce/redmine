@@ -34,12 +34,12 @@ class Token < ActiveRecord::Base
 
   # Delete all expired tokens
   def self.destroy_expired
-    Token.delete_all ["action <> 'feeds' AND created_on < ?", Time.now - @@validity_time]
+    Token.delete_all ["action NOT IN (?) AND created_on < ?", ['feeds', 'api'], Time.now - @@validity_time]
   end
 
 private
   def self.generate_token_value
-    ActiveSupport::SecureRandom.hex(20)
+    Redmine::Utils.random_hex(20)
   end
 
   # Removes obsolete tokens (same user and action)

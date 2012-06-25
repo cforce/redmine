@@ -84,6 +84,45 @@ class MyControllerTest < ActionController::TestCase
     assert user.groups.empty?
   end
 
+  def test_my_account_should_show_destroy_link
+    get :account
+    assert_select 'a[href=/my/account/destroy]'
+  end
+
+  def test_get_destroy_should_display_the_destroy_confirmation
+    get :destroy
+    assert_response :success
+    assert_template 'destroy'
+    assert_select 'form[action=/my/account/destroy]' do
+      assert_select 'input[name=confirm]'
+    end
+  end
+
+  def test_post_destroy_without_confirmation_should_not_destroy_account
+    assert_no_difference 'User.count' do
+      post :destroy
+    end
+    assert_response :success
+    assert_template 'destroy'
+  end
+
+  def test_post_destroy_without_confirmation_should_destroy_account
+    assert_difference 'User.count', -1 do
+      post :destroy, :confirm => '1'
+    end
+    assert_redirected_to '/'
+    assert_match /deleted/i, flash[:notice]
+  end
+
+  def test_post_destroy_with_unsubscribe_not_allowed_should_not_destroy_account
+    User.any_instance.stubs(:own_account_deletable?).returns(false)
+
+    assert_no_difference 'User.count' do
+      post :destroy, :confirm => '1'
+    end
+    assert_redirected_to '/my/account'
+  end
+
   def test_change_password
     get :password
     assert_response :success
@@ -95,7 +134,7 @@ class MyControllerTest < ActionController::TestCase
                     :new_password_confirmation => 'hello2'
     assert_response :success
     assert_template 'password'
-    assert_tag :tag => "div", :attributes => { :class => "errorExplanation" }
+    assert_error_tag :content => /Password doesn't match confirmation/
 
     # wrong password
     post :password, :password => 'wrongpassword',
@@ -137,71 +176,41 @@ class MyControllerTest < ActionController::TestCase
     assert_equal ['documents', 'calendar', 'latestnews'], User.find(2).pref[:my_page_layout]['left']
   end
 
-  context "POST to reset_rss_key" do
-    context "with an existing rss_token" do
-      setup do
-        @previous_token_value = User.find(2).rss_key # Will generate one if it's missing
-        post :reset_rss_key
-      end
+  def test_reset_rss_key_with_existing_key
+    @previous_token_value = User.find(2).rss_key # Will generate one if it's missing
+    post :reset_rss_key
 
-      should "destroy the existing token" do
-        assert_not_equal @previous_token_value, User.find(2).rss_key
-      end
-
-      should "create a new token" do
-        assert User.find(2).rss_token
-      end
-
-      should_set_the_flash_to /reset/
-      should_redirect_to('my account') {'/my/account' }
-    end
-
-    context "with no rss_token" do
-      setup do
-        assert_nil User.find(2).rss_token
-        post :reset_rss_key
-      end
-
-      should "create a new token" do
-        assert User.find(2).rss_token
-      end
-
-      should_set_the_flash_to /reset/
-      should_redirect_to('my account') {'/my/account' }
-    end
+    assert_not_equal @previous_token_value, User.find(2).rss_key
+    assert User.find(2).rss_token
+    assert_match /reset/, flash[:notice]
+    assert_redirected_to '/my/account'
   end
 
-  context "POST to reset_api_key" do
-    context "with an existing api_token" do
-      setup do
-        @previous_token_value = User.find(2).api_key # Will generate one if it's missing
-        post :reset_api_key
-      end
+  def test_reset_rss_key_without_existing_key
+    assert_nil User.find(2).rss_token
+    post :reset_rss_key
 
-      should "destroy the existing token" do
-        assert_not_equal @previous_token_value, User.find(2).api_key
-      end
+    assert User.find(2).rss_token
+    assert_match /reset/, flash[:notice]
+    assert_redirected_to '/my/account'
+  end
 
-      should "create a new token" do
-        assert User.find(2).api_token
-      end
+  def test_reset_api_key_with_existing_key
+    @previous_token_value = User.find(2).api_key # Will generate one if it's missing
+    post :reset_api_key
 
-      should_set_the_flash_to /reset/
-      should_redirect_to('my account') {'/my/account' }
-    end
+    assert_not_equal @previous_token_value, User.find(2).api_key
+    assert User.find(2).api_token
+    assert_match /reset/, flash[:notice]
+    assert_redirected_to '/my/account'
+  end
 
-    context "with no api_token" do
-      setup do
-        assert_nil User.find(2).api_token
-        post :reset_api_key
-      end
+  def test_reset_api_key_without_existing_key
+    assert_nil User.find(2).api_token
+    post :reset_api_key
 
-      should "create a new token" do
-        assert User.find(2).api_token
-      end
-
-      should_set_the_flash_to /reset/
-      should_redirect_to('my account') {'/my/account' }
-    end
+    assert User.find(2).api_token
+    assert_match /reset/, flash[:notice]
+    assert_redirected_to '/my/account'
   end
 end

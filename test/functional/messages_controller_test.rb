@@ -104,9 +104,9 @@ class MessagesControllerTest < ActionController::TestCase
     assert_equal 1, message.board_id
 
     mail = ActionMailer::Base.deliveries.last
-    assert_kind_of TMail::Mail, mail
+    assert_not_nil mail
     assert_equal "[#{message.board.project.name} - #{message.board.name} - msg#{message.root.id}] Test created message", mail.subject
-    assert mail.body.include?('Message body')
+    assert_mail_body_match 'Message body', mail
     # author
     assert mail.bcc.include?('jsmith@somenet.foo')
     # project member
@@ -165,9 +165,20 @@ class MessagesControllerTest < ActionController::TestCase
 
   def test_destroy_topic
     @request.session[:user_id] = 2
-    post :destroy, :board_id => 1, :id => 1
+    assert_difference 'Message.count', -3 do
+      post :destroy, :board_id => 1, :id => 1
+    end
     assert_redirected_to '/projects/ecookbook/boards/1'
     assert_nil Message.find_by_id(1)
+  end
+
+  def test_destroy_reply
+    @request.session[:user_id] = 2
+    assert_difference 'Message.count', -1 do
+      post :destroy, :board_id => 1, :id => 2
+    end
+    assert_redirected_to '/boards/1/topics/1?r=2'
+    assert_nil Message.find_by_id(2)
   end
 
   def test_quote
@@ -175,5 +186,24 @@ class MessagesControllerTest < ActionController::TestCase
     xhr :get, :quote, :board_id => 1, :id => 3
     assert_response :success
     assert_select_rjs :show, 'reply'
+  end
+
+  def test_preview_new
+    @request.session[:user_id] = 2
+    post :preview,
+      :board_id => 1,
+      :message => {:subject => "", :content => "Previewed text"}
+    assert_response :success
+    assert_template 'common/_preview'
+  end
+
+  def test_preview_edit
+    @request.session[:user_id] = 2
+    post :preview,
+      :id => 4,
+      :board_id => 1,
+      :message => {:subject => "", :content => "Previewed text"}
+    assert_response :success
+    assert_template 'common/_preview'
   end
 end

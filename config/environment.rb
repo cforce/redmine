@@ -4,15 +4,12 @@
 # you don't control web/app server and can't set it the proper way
 # ENV['RAILS_ENV'] ||= 'production'
 
-# Specifies gem version of Rails to use when vendor/rails is not present
-RAILS_GEM_VERSION = '2.3.14' unless defined? RAILS_GEM_VERSION
-
-if RUBY_VERSION >= '1.9'
-  Encoding.default_external = 'UTF-8'
-end
-
 # Bootstrap the Rails environment, frameworks, and default configuration
 require File.join(File.dirname(__FILE__), 'boot')
+
+if RUBY_VERSION >= '1.9' && defined?(Rails) && Rails::VERSION::MAJOR < 3
+  Encoding.default_external = 'UTF-8'
+end
 
 # Load Engine plugin if available
 begin
@@ -54,8 +51,6 @@ Rails::Initializer.run do |config|
   # It will automatically turn deliveries on
   config.action_mailer.perform_deliveries = false
 
-  config.gem 'rubytree', :lib => 'tree'
-  config.gem 'coderay', :version => '~>1.0.0'
   # Reihenfolge der Plugin festlegen
   # Damit die Fusszeile mit den Summen der Zeiten nicht zwischen cvs,AtomPdf Export und XLS rutscht, muss erst das redmine_xls_export
   # Plugin und dann das redmine_spent_time_column Plugin geladen werden
