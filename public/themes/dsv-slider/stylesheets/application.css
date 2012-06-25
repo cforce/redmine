@@ -394,6 +394,11 @@ h2, h3, .wiki h1, .wiki h2 {
 .wiki h5 {
     color: #444;
 }
+
+.contextual input, .contextual select {
+font-size: 0.9em;
+padding-bottom: 1px;
+}
 input[type="text"], input[type="password"], select, textarea {
     border-top: 1px solid #606060;
     border-left: 1px solid #606060;

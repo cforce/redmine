@@ -1,0 +1,31 @@
+========================================
+Redmine My Page Parts Collection Plugins
+========================================
+
+This plugin is the collection of Redmine's my page parts.
+Originally following plugin:
+
+* Redmine My Page Blocks(vividtone's fork)
+ *  https://github.com/vividtone/redmine_vividtone_my_page_blocks
+* Redmine My Widgets Plugin  (cforce's fork)
+ *  https://github.com/cforce/redmine-my-widgets-plugin
+* Redmien My Page Queries (Undev's fork)
+ * https://github.com/Undev/redmine_my_page_queries
+
+
+This plugin provides instances of Redmine additional widgets on the "My page" page.
+
+
+## Author
+### Redmine My Page Blocks
+MAEDA Go (FAR END Technologies Corporation)
+
+twitter.com/g_maeda www.facebook.com/MAEDA.Go
+
+### Redmine My Widgets
+Created by Gossamer Threads Inc. (http://www.gossamer-threads.com)
+
+Primary developer: Brad Beattie
+
+### Redmine My Page
+Created by ALVILA SYSTEMS s.r.o

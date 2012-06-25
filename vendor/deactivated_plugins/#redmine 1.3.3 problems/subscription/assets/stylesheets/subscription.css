@@ -1,0 +1,12 @@
+#subscribe-register p {
+    margin: 0.5em 0;
+}
+#subscribe-register #user_mail {
+    width: auto;
+}
+#user_mail.empty {
+    color: #aaa;
+}
+#subscriptions.list {
+    border: none;
+}

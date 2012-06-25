@@ -1,0 +1,3 @@
+<%= @board.project.name %>: <%= @board.name %>
+<%= @board_url %>
+<%= @board.description %>
