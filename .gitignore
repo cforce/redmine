@@ -46,3 +46,5 @@
 !/vendor/plugins/open_id_authentication
 !/vendor/plugins/prepend_engine_views
 !/vendor/plugins/rfpdf
+deactivated_plugins
+/vendor/deactivated_plugins
