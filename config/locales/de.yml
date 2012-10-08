@@ -84,9 +84,7 @@ de:
       format:
         unit: '€'
         format: '%n %u'
-        separator:
-        delimiter:
-        precision:
+        delimiter: ''
     percentage:
       format:
         delimiter: ""
@@ -96,7 +94,7 @@ de:
     human:
       format:
         delimiter: ""
-        precision: 1
+        precision: 3
       storage_units:
         format: "%n %u"
         units:
@@ -1046,14 +1044,47 @@ de:
   notice_issue_update_conflict: Das Ticket wurde von einem anderen Nutzer überarbeitet während Ihrer Bearbeitung.
   text_issue_conflict_resolution_cancel: Meine Änderungen verwerfen und %{link} neu anzeigen
   permission_manage_related_issues: Zugehörige Tickets verwalten
-  field_ldap_filter: LDAP Filter
+  field_auth_source_ldap_filter: LDAP Filter
   label_search_for_watchers: Nach hinzufügbaren Beobachtern suchen
   notice_account_deleted: Ihr Benutzerkonto wurde unwiderruflich gelöscht.
   setting_unsubscribe: Erlaubt Benutzern das eigene Benutzerkonto zu löschen
   button_delete_my_account: Mein Benutzerkonto löschen 
   text_account_destroy_confirmation: Möchten Sie wirklich fortfahren?\nIhr Benutzerkonto wird für immer gelöscht und kann nicht wiederhergestellt werden.
-  error_session_expired: Your session has expired. Please login again.
-  text_session_expiration_settings: "Warning: changing these settings may expire the current sessions including yours."
-  setting_session_lifetime: Session maximum lifetime
-  setting_session_timeout: Session inactivity timeout
-  label_session_expiration: Session expiration
+  error_session_expired: Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an.
+  text_session_expiration_settings: "Achtung: Änderungen können aktuelle Sitzungen beenden, Ihre eingeschlossen!" 
+  setting_session_lifetime: Längste Dauer einer Sitzung
+  setting_session_timeout: Zeitüberschreitung bei Inaktivität
+  label_session_expiration: Ende einer Sitzung
+  permission_close_project: Schließen / erneutes Öffnen eines Projekts
+  label_show_closed_projects: Geschlossene Projekte anzeigen
+  button_close: Schließen
+  button_reopen: Öffnen
+  project_status_active: aktiv
+  project_status_closed: geschlossen
+  project_status_archived: archiviert
+  text_project_closed: Dieses Projekt ist geschlossen und kann nicht bearbeitet werden.
+  notice_user_successful_create: Benutzer %{id} angelegt.
+  field_core_fields: Standardwerte
+  field_timeout: Auszeit (in Sekunden)
+  setting_thumbnails_enabled: Vorschaubilder von Dateianhängen anzeigen
+  setting_thumbnails_size: Größe der Vorschaubilder (in Pixel)
+  label_status_transitions: Status transitions
+  label_fields_permissions: Fields permissions
+  label_readonly: Nur-Lese-Zugriff
+  label_required: Erforderlich
+  text_repository_identifier_info: 'Kleinbuchstaben (a-z), Ziffern, Binde- und Unterstriche erlaubt.<br />Einmal gespeichert, kann die Kennung nicht mehr geändert werden.'
+  field_board_parent: Parent forum
+  label_attribute_of_project: Project's %{name}
+  label_attribute_of_author: Author's %{name}
+  label_attribute_of_assigned_to: Assignee's %{name}
+  label_attribute_of_fixed_version: Target version's %{name}
+  label_copy_subtasks: Copy subtasks
+  label_copied_to: copied to
+  label_copied_from: copied from
+  label_any_issues_in_project: any issues in project
+  label_any_issues_not_in_project: any issues not in project
+  field_private_notes: Private notes
+  permission_view_private_notes: View private notes
+  permission_set_notes_private: Set notes as private
+  label_no_issues_in_project: no issues in project
+  label_any: alle

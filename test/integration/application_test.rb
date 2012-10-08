@@ -1,5 +1,5 @@
 # Redmine - project management software
-# Copyright (C) 2006-2011  Jean-Philippe Lang
+# Copyright (C) 2006-2012  Jean-Philippe Lang
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -59,5 +59,10 @@ class ApplicationTest < ActionController::IntegrationTest
     get "issues/4.atom?key=#{rss_key}"
     assert_response 200
     assert_nil session[:user_id]
+  end
+
+  def test_missing_template_should_respond_with_404
+    get '/login.png'
+    assert_response 404
   end
 end

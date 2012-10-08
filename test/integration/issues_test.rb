@@ -1,5 +1,5 @@
 # Redmine - project management software
-# Copyright (C) 2006-2011  Jean-Philippe Lang
+# Copyright (C) 2006-2012  Jean-Philippe Lang
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -215,14 +215,14 @@ class IssuesTest < ActionController::IntegrationTest
     assert_not_equal subject, Issue.find(1).subject
 
     post '/issues/1', {:issue => {:subject => subject}}, credentials('jsmith')
-    assert_response 405
+    assert_response 404
     assert_not_equal subject, Issue.find(1).subject
   end
 
   def test_get_watch_should_be_invalid
     assert_no_difference 'Watcher.count' do
       get '/watchers/watch?object_type=issue&object_id=1', {}, credentials('jsmith')
-      assert_response 405
+      assert_response 404
     end
   end
 end

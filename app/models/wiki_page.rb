@@ -1,5 +1,5 @@
 # Redmine - project management software
-# Copyright (C) 2006-2011  Jean-Philippe Lang
+# Copyright (C) 2006-2012  Jean-Philippe Lang
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -49,7 +49,7 @@ class WikiPage < ActiveRecord::Base
   before_save    :handle_redirects
 
   # eager load information about last updates, without loading text
-  named_scope :with_updated_on, {
+  scope :with_updated_on, {
     :select => "#{WikiPage.table_name}.*, #{WikiContent.table_name}.updated_on",
     :joins => "LEFT JOIN #{WikiContent.table_name} ON #{WikiContent.table_name}.page_id = #{WikiPage.table_name}.id"
   }
@@ -143,7 +143,7 @@ class WikiPage < ActiveRecord::Base
       if time = read_attribute(:updated_on)
         # content updated_on was eager loaded with the page
         begin
-          @updated_on = Time.zone ? Time.zone.parse(time.to_s) : Time.parse(time.to_s)
+          @updated_on = (self.class.default_timezone == :utc ? Time.parse(time.to_s).utc : Time.parse(time.to_s).localtime)
         rescue
         end
       else

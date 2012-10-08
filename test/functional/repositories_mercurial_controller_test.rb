@@ -1,5 +1,5 @@
 # Redmine - project management software
-# Copyright (C) 2006-2011  Jean-Philippe Lang
+# Copyright (C) 2006-2012  Jean-Philippe Lang
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -371,34 +371,33 @@ class RepositoriesMercurialControllerTest < ActionController::TestCase
       end
     end
 
+    def test_diff_should_show_modified_filenames
+      get :diff, :id => PRJ_ID, :rev => '400bb8672109', :type => 'inline'
+      assert_response :success
+      assert_template 'diff'
+      assert_select 'th.filename', :text => 'sources/watchers_controller.rb'
+    end
+
+    def test_diff_should_show_deleted_filenames
+      get :diff, :id => PRJ_ID, :rev => 'b3a615152df8', :type => 'inline'
+      assert_response :success
+      assert_template 'diff'
+      assert_select 'th.filename', :text => 'sources/welcome_controller.rb'
+    end
+
     def test_annotate
       get :annotate, :id => PRJ_ID,
           :path => repository_path_hash(['sources', 'watchers_controller.rb'])[:param]
       assert_response :success
       assert_template 'annotate'
-      # Line 23, revision 4:def6d2f1254a
-      assert_tag :tag => 'th',
-                 :content => '23',
-                 :attributes => { :class => 'line-num' },
-                 :sibling =>
-                       {
-                         :tag => 'td',
-                         :attributes => { :class => 'revision' },
-                         :child => { :tag => 'a', :content => '4:def6d2f1254a' }
-                       }
-      assert_tag :tag => 'th',
-                 :content => '23',
-                 :attributes => { :class => 'line-num' },
-                 :sibling =>
-                       {
-                          :tag     => 'td'    ,
-                          :content => 'jsmith' ,
-                          :attributes => { :class   => 'author' },
-                        }
-      assert_tag :tag => 'th',
-                 :content => '23',
-                 :attributes => { :class => 'line-num' },
-                 :sibling => { :tag => 'td', :content => /watcher =/ }
+
+      # Line 22, revision 4:def6d2f1254a
+      assert_select 'tr' do
+        assert_select 'th.line-num', :text => '22'
+        assert_select 'td.revision', :text => '4:def6d2f1254a'
+        assert_select 'td.author', :text => 'jsmith'
+        assert_select 'td', :text => /remove_watcher/
+      end
     end
 
     def test_annotate_not_in_tip

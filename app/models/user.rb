@@ -1,5 +1,5 @@
 # Redmine - project management software
-# Copyright (C) 2006-2011  Jean-Philippe Lang
+# Copyright (C) 2006-2012  Jean-Philippe Lang
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -28,11 +28,36 @@ class User < Principal
 
   # Different ways of displaying/sorting users
   USER_FORMATS = {
-    :firstname_lastname => {:string => '#{firstname} #{lastname}', :order => %w(firstname lastname id)},
-    :firstname => {:string => '#{firstname}', :order => %w(firstname id)},
-    :lastname_firstname => {:string => '#{lastname} #{firstname}', :order => %w(lastname firstname id)},
-    :lastname_coma_firstname => {:string => '#{lastname}, #{firstname}', :order => %w(lastname firstname id)},
-    :username => {:string => '#{login}', :order => %w(login id)},
+    :firstname_lastname => {
+        :string => '#{firstname} #{lastname}',
+        :order => %w(firstname lastname id),
+        :setting_order => 1
+      },
+    :firstname => {
+        :string => '#{firstname}',
+        :order => %w(firstname id),
+        :setting_order => 2
+      },
+    :lastname_firstname => {
+        :string => '#{lastname} #{firstname}',
+        :order => %w(lastname firstname id),
+        :setting_order => 3
+      },
+    :lastname_coma_firstname => {
+        :string => '#{lastname}, #{firstname}',
+        :order => %w(lastname firstname id),
+        :setting_order => 4
+      },
+    :lastname => {
+        :string => '#{lastname}',
+        :order => %w(lastname id),
+        :setting_order => 5
+      },
+    :username => {
+        :string => '#{login}',
+        :order => %w(login id),
+        :setting_order => 6
+      },
   }
 
   MAIL_NOTIFICATION_OPTIONS = [
@@ -52,10 +77,8 @@ class User < Principal
   has_one :api_token, :class_name => 'Token', :conditions => "action='api'"
   belongs_to :auth_source
 
-  # Active non-anonymous users scope
-  named_scope :active, :conditions => "#{User.table_name}.status = #{STATUS_ACTIVE}"
-  named_scope :logged, :conditions => "#{User.table_name}.status <> #{STATUS_ANONYMOUS}"
-  named_scope :status, lambda {|arg| arg.blank? ? {} : {:conditions => {:status => arg.to_i}} }
+  scope :logged, :conditions => "#{User.table_name}.status <> #{STATUS_ANONYMOUS}"
+  scope :status, lambda {|arg| arg.blank? ? {} : {:conditions => {:status => arg.to_i}} }
 
   acts_as_customizable
 
@@ -84,11 +107,11 @@ class User < Principal
   before_save   :update_hashed_password
   before_destroy :remove_references_before_destroy
 
-  named_scope :in_group, lambda {|group|
+  scope :in_group, lambda {|group|
     group_id = group.is_a?(Group) ? group.id : group.to_i
     { :conditions => ["#{User.table_name}.id IN (SELECT gu.user_id FROM #{table_name_prefix}groups_users#{table_name_suffix} gu WHERE gu.group_id = ?)", group_id] }
   }
-  named_scope :not_in_group, lambda {|group|
+  scope :not_in_group, lambda {|group|
     group_id = group.is_a?(Group) ? group.id : group.to_i
     { :conditions => ["#{User.table_name}.id NOT IN (SELECT gu.user_id FROM #{table_name_prefix}groups_users#{table_name_suffix} gu WHERE gu.group_id = ?)", group_id] }
   }
@@ -373,6 +396,15 @@ class User < Principal
     end
   end
 
+  # Returns the day of +time+ according to user's time zone
+  def time_to_date(time)
+    if time_zone.nil?
+      time.to_date
+    else
+      time.in_time_zone(time_zone).to_date
+    end
+  end
+
   def logged?
     true
   end
@@ -385,7 +417,7 @@ class User < Principal
   def roles_for_project(project)
     roles = []
     # No role on archived projects
-    return roles unless project && project.active?
+    return roles if project.nil? || project.archived?
     if logged?
       # Find project membership
       membership = memberships.detect {|m| m.project_id == project.id}
@@ -411,10 +443,13 @@ class User < Principal
   def projects_by_role
     return @projects_by_role if @projects_by_role
 
-    @projects_by_role = Hash.new {|h,k| h[k]=[]}
+    @projects_by_role = Hash.new([])
     memberships.each do |membership|
-      membership.roles.each do |role|
-        @projects_by_role[role] << membership.project if membership.project
+      if membership.project
+        membership.roles.each do |role|
+          @projects_by_role[role] = [] unless @projects_by_role.key?(role)
+          @projects_by_role[role] << membership.project
+        end
       end
     end
     @projects_by_role.each do |role, projects|
@@ -446,9 +481,6 @@ class User < Principal
   #   or falls back to Non Member / Anonymous permissions depending if the user is logged
   def allowed_to?(action, context, options={}, &block)
     if context && context.is_a?(Project)
-      # No action allowed on archived projects
-      return false unless context.active?
-      # No action allowed on disabled modules
       return false unless context.allows_to?(action)
       # Admin users are authorized for anything else
       return true if admin?
@@ -652,6 +684,10 @@ class AnonymousUser < User
   def mail; nil end
   def time_zone; nil end
   def rss_key; nil end
+
+  def pref
+    UserPreference.new(:user => self)
+  end
 
   # Anonymous user can not be destroyed
   def destroy

@@ -1,7 +1,7 @@
 # encoding: utf-8
 #
 # Redmine - project management software
-# Copyright (C) 2006-2011  Jean-Philippe Lang
+# Copyright (C) 2006-2012  Jean-Philippe Lang
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -75,6 +75,12 @@ class AttachmentTest < ActiveSupport::TestCase
     end
   end
 
+  def test_description_length_should_be_validated
+    a = Attachment.new(:description => 'a' * 300)
+    assert !a.save
+    assert_not_nil a.errors[:description]
+  end
+
   def test_destroy
     a = Attachment.new(:container => Issue.find(1),
                        :file => uploaded_test_file("testfile.txt", "text/plain"),
@@ -142,6 +148,14 @@ class AttachmentTest < ActiveSupport::TestCase
     assert_equal '770c509475505f37c2b8fb6030434d6b.txt', Attachment.disk_filename("test_accentué.txt")[13..-1]
     assert_equal 'f8139524ebb8f32e51976982cd20a85d', Attachment.disk_filename("test_accentué")[13..-1]
     assert_equal 'cbb5b0f30978ba03731d61f9f6d10011', Attachment.disk_filename("test_accentué.ça")[13..-1]
+  end
+
+  def test_title
+    a = Attachment.new(:filename => "test.png")
+    assert_equal "test.png", a.title
+
+    a = Attachment.new(:filename => "test.png", :description => "Cool image")
+    assert_equal "test.png (Cool image)", a.title
   end
 
   def test_prune_should_destroy_old_unattached_attachments
@@ -213,5 +227,29 @@ class AttachmentTest < ActiveSupport::TestCase
     assert_equal 17, la2.id
 
     set_tmp_attachments_directory
+  end
+
+  def test_thumbnailable_should_be_true_for_images
+    assert_equal true, Attachment.new(:filename => 'test.jpg').thumbnailable?
+  end
+
+  def test_thumbnailable_should_be_true_for_non_images
+    assert_equal false, Attachment.new(:filename => 'test.txt').thumbnailable?
+  end
+
+  if convert_installed?
+    def test_thumbnail_should_generate_the_thumbnail
+      set_fixtures_attachments_directory
+      attachment = Attachment.find(16)
+      Attachment.clear_thumbnails
+
+      assert_difference "Dir.glob(File.join(Attachment.thumbnails_storage_path, '*.thumb')).size" do
+        thumbnail = attachment.thumbnail
+        assert_equal "16_8e0294de2441577c529f170b6fb8f638_100.thumb", File.basename(thumbnail)
+        assert File.exists?(thumbnail)
+      end
+    end
+  else
+    puts '(ImageMagick convert not available)'
   end
 end

@@ -1,5 +1,5 @@
 # Redmine - project management software
-# Copyright (C) 2006-2011  Jean-Philippe Lang
+# Copyright (C) 2006-2012  Jean-Philippe Lang
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -20,6 +20,7 @@ class Project < ActiveRecord::Base
 
   # Project statuses
   STATUS_ACTIVE     = 1
+  STATUS_CLOSED     = 5
   STATUS_ARCHIVED   = 9
 
   # Maximum length for project identifiers
@@ -27,7 +28,7 @@ class Project < ActiveRecord::Base
 
   # Specific overidden Activities
   has_many :time_entry_activities
-  has_many :members, :include => [:user, :roles], :conditions => "#{User.table_name}.type='User' AND #{User.table_name}.status=#{User::STATUS_ACTIVE}"
+  has_many :members, :include => [:principal, :roles], :conditions => "#{User.table_name}.type='User' AND #{User.table_name}.status=#{User::STATUS_ACTIVE}"
   has_many :memberships, :class_name => 'Member'
   has_many :member_principals, :class_name => 'Member',
                                :include => :principal,
@@ -80,14 +81,15 @@ class Project < ActiveRecord::Base
   # reserved words
   validates_exclusion_of :identifier, :in => %w( new )
 
+  after_save :update_position_under_parent, :if => Proc.new {|project| project.name_changed?}
   before_destroy :delete_all_members
 
-  named_scope :has_module, lambda { |mod| { :conditions => ["#{Project.table_name}.id IN (SELECT em.project_id FROM #{EnabledModule.table_name} em WHERE em.name=?)", mod.to_s] } }
-  named_scope :active, { :conditions => "#{Project.table_name}.status = #{STATUS_ACTIVE}"}
-  named_scope :status, lambda {|arg| arg.blank? ? {} : {:conditions => {:status => arg.to_i}} }
-  named_scope :all_public, { :conditions => { :is_public => true } }
-  named_scope :visible, lambda {|*args| {:conditions => Project.visible_condition(args.shift || User.current, *args) }}
-  named_scope :allowed_to, lambda {|*args| 
+  scope :has_module, lambda { |mod| { :conditions => ["#{Project.table_name}.id IN (SELECT em.project_id FROM #{EnabledModule.table_name} em WHERE em.name=?)", mod.to_s] } }
+  scope :active, { :conditions => "#{Project.table_name}.status = #{STATUS_ACTIVE}"}
+  scope :status, lambda {|arg| arg.blank? ? {} : {:conditions => {:status => arg.to_i}} }
+  scope :all_public, { :conditions => { :is_public => true } }
+  scope :visible, lambda {|*args| {:conditions => Project.visible_condition(args.shift || User.current, *args) }}
+  scope :allowed_to, lambda {|*args| 
     user = User.current
     permission = nil
     if args.first.is_a?(Symbol)
@@ -98,7 +100,7 @@ class Project < ActiveRecord::Base
     end
     { :conditions => Project.allowed_to_condition(user, permission, *args) }
   }
-  named_scope :like, lambda {|arg|
+  scope :like, lambda {|arg|
     if arg.blank?
       {}
     else
@@ -121,7 +123,7 @@ class Project < ActiveRecord::Base
       self.enabled_module_names = Setting.default_projects_modules
     end
     if !initialized.key?('trackers') && !initialized.key?('tracker_ids')
-      self.trackers = Tracker.all
+      self.trackers = Tracker.sorted.all
     end
   end
 
@@ -130,7 +132,7 @@ class Project < ActiveRecord::Base
   end
 
   def identifier_frozen?
-    errors[:identifier].nil? && !(new_record? || identifier.blank?)
+    errors[:identifier].blank? && !(new_record? || identifier.blank?)
   end
 
   # returns latest created projects
@@ -161,12 +163,11 @@ class Project < ActiveRecord::Base
   # * :with_subprojects => limit the condition to project and its subprojects
   # * :member => limit the condition to the user projects
   def self.allowed_to_condition(user, permission, options={})
-    base_statement = "#{Project.table_name}.status=#{Project::STATUS_ACTIVE}"
-    if perm = Redmine::AccessControl.permission(permission)
-      unless perm.project_module.nil?
-        # If the permission belongs to a project module, make sure the module is enabled
-        base_statement << " AND #{Project.table_name}.id IN (SELECT em.project_id FROM #{EnabledModule.table_name} em WHERE em.name='#{perm.project_module}')"
-      end
+    perm = Redmine::AccessControl.permission(permission)
+    base_statement = (perm && perm.read? ? "#{Project.table_name}.status <> #{Project::STATUS_ARCHIVED}" : "#{Project.table_name}.status = #{Project::STATUS_ACTIVE}")
+    if perm && perm.project_module
+      # If the permission belongs to a project module, make sure the module is enabled
+      base_statement << " AND #{Project.table_name}.id IN (SELECT em.project_id FROM #{EnabledModule.table_name} em WHERE em.name='#{perm.project_module}')"
     end
     if options[:project]
       project_statement = "#{Project.table_name}.id = #{options[:project].id}"
@@ -186,7 +187,7 @@ class Project < ActiveRecord::Base
       end
       if user.logged?
         user.projects_by_role.each do |role, projects|
-          if role.allowed_to?(permission)
+          if role.allowed_to?(permission) && projects.any?
             statement_by_role[role] = "#{Project.table_name}.id IN (#{projects.collect(&:id).join(',')})"
           end
         end
@@ -272,6 +273,10 @@ class Project < ActiveRecord::Base
     end
   end
 
+  def self.find_by_param(*args)
+    self.find(*args)
+  end
+
   def reload(*args)
     @shared_versions = nil
     @rolled_up_versions = nil
@@ -319,6 +324,14 @@ class Project < ActiveRecord::Base
   def unarchive
     return false if ancestors.detect {|a| !a.active?}
     update_attribute :status, STATUS_ACTIVE
+  end
+
+  def close
+    self_and_descendants.status(STATUS_ACTIVE).update_all :status => STATUS_CLOSED
+  end
+
+  def reopen
+    self_and_descendants.status(STATUS_CLOSED).update_all :status => STATUS_ACTIVE
   end
 
   # Returns an array of projects the project can be moved to
@@ -371,22 +384,7 @@ class Project < ActiveRecord::Base
       # Nothing to do
       true
     elsif p.nil? || (p.active? && move_possible?(p))
-      # Insert the project so that target's children or root projects stay alphabetically sorted
-      sibs = (p.nil? ? self.class.roots : p.children)
-      to_be_inserted_before = sibs.detect {|c| c.name.to_s.downcase > name.to_s.downcase }
-      if to_be_inserted_before
-        move_to_left_of(to_be_inserted_before)
-      elsif p.nil?
-        if sibs.empty?
-          # move_to_root adds the project in first (ie. left) position
-          move_to_root
-        else
-          move_to_right_of(sibs.last) unless self == sibs.last
-        end
-      else
-        # move_to_child_of adds the project in last (ie.right) position
-        move_to_child_of(p)
-      end
+      set_or_update_position_under(p)
       Issue.update_versions_from_hierarchy_change(self)
       true
     else
@@ -400,7 +398,7 @@ class Project < ActiveRecord::Base
     @rolled_up_trackers ||=
       Tracker.find(:all, :joins => :projects,
                          :select => "DISTINCT #{Tracker.table_name}.*",
-                         :conditions => ["#{Project.table_name}.lft >= ? AND #{Project.table_name}.rgt <= ? AND #{Project.table_name}.status = #{STATUS_ACTIVE}", lft, rgt],
+                         :conditions => ["#{Project.table_name}.lft >= ? AND #{Project.table_name}.rgt <= ? AND #{Project.table_name}.status <> #{STATUS_ARCHIVED}", lft, rgt],
                          :order => "#{Tracker.table_name}.position")
   end
 
@@ -419,20 +417,20 @@ class Project < ActiveRecord::Base
   def rolled_up_versions
     @rolled_up_versions ||=
       Version.scoped(:include => :project,
-                     :conditions => ["#{Project.table_name}.lft >= ? AND #{Project.table_name}.rgt <= ? AND #{Project.table_name}.status = #{STATUS_ACTIVE}", lft, rgt])
+                     :conditions => ["#{Project.table_name}.lft >= ? AND #{Project.table_name}.rgt <= ? AND #{Project.table_name}.status <> #{STATUS_ARCHIVED}", lft, rgt])
   end
 
   # Returns a scope of the Versions used by the project
   def shared_versions
     if new_record?
       Version.scoped(:include => :project,
-                     :conditions => "#{Project.table_name}.status = #{Project::STATUS_ACTIVE} AND #{Version.table_name}.sharing = 'system'")
+                     :conditions => "#{Project.table_name}.status <> #{Project::STATUS_ARCHIVED} AND #{Version.table_name}.sharing = 'system'")
     else
       @shared_versions ||= begin
         r = root? ? self : root
         Version.scoped(:include => :project,
                        :conditions => "#{Project.table_name}.id = #{id}" +
-                                      " OR (#{Project.table_name}.status = #{Project::STATUS_ACTIVE} AND (" +
+                                      " OR (#{Project.table_name}.status <> #{Project::STATUS_ARCHIVED} AND (" +
                                           " #{Version.table_name}.sharing = 'system'" +
                                           " OR (#{Project.table_name}.lft >= #{r.lft} AND #{Project.table_name}.rgt <= #{r.rgt} AND #{Version.table_name}.sharing = 'tree')" +
                                           " OR (#{Project.table_name}.lft < #{lft} AND #{Project.table_name}.rgt > #{rgt} AND #{Version.table_name}.sharing IN ('hierarchy', 'descendants'))" +
@@ -474,7 +472,7 @@ class Project < ActiveRecord::Base
   # Returns the users that should be notified on project events
   def notified_users
     # TODO: User part should be extracted to User#notify_about?
-    members.select {|m| m.mail_notification? || m.user.mail_notification == 'all'}.collect {|m| m.user}
+    members.select {|m| m.principal.present? && (m.mail_notification? || m.principal.mail_notification == 'all')}.collect {|m| m.principal}
   end
 
   # Returns an array of all custom fields enabled for project issues
@@ -511,6 +509,13 @@ class Project < ActiveRecord::Base
     s << ' root' if root?
     s << ' child' if child?
     s << (leaf? ? ' leaf' : ' parent')
+    unless active?
+      if archived?
+        s << ' archived'
+      else
+        s << ' closed'
+      end
+    end
     s
   end
 
@@ -554,11 +559,20 @@ class Project < ActiveRecord::Base
     end
   end
 
-  # Return true if this project is allowed to do the specified action.
+  # Return true if this project allows to do the specified action.
   # action can be:
   # * a parameter-like Hash (eg. :controller => 'projects', :action => 'edit')
   # * a permission Symbol (eg. :edit_project)
   def allows_to?(action)
+    if archived?
+      # No action allowed on archived projects
+      return false
+    end
+    unless active? || Redmine::AccessControl.read_action?(action)
+      # No write action allowed on closed projects
+      return false
+    end
+    # No action allowed on disabled modules
     if action.is_a? Hash
       allowed_actions.include? "#{action[:controller]}/#{action[:action]}"
     else
@@ -749,27 +763,30 @@ class Project < ActiveRecord::Base
   end
 
   # Copies issues from +project+
-  # Note: issues assigned to a closed version won't be copied due to validation rules
   def copy_issues(project)
     # Stores the source issue id as a key and the copied issues as the
     # value.  Used to map the two togeather for issue relations.
     issues_map = {}
 
+    # Store status and reopen locked/closed versions
+    version_statuses = versions.reject(&:open?).map {|version| [version, version.status]}
+    version_statuses.each do |version, status|
+      version.update_attribute :status, 'open'
+    end
+
     # Get issues sorted by root_id, lft so that parent issues
     # get copied before their children
     project.issues.find(:all, :order => 'root_id, lft').each do |issue|
       new_issue = Issue.new
-      new_issue.copy_from(issue)
+      new_issue.copy_from(issue, :subtasks => false, :link => false)
       new_issue.project = self
-      # Reassign fixed_versions by name, since names are unique per
-      # project and the versions for self are not yet saved
-      if issue.fixed_version
-        new_issue.fixed_version = self.versions.select {|v| v.name == issue.fixed_version.name}.first
+      # Reassign fixed_versions by name, since names are unique per project
+      if issue.fixed_version && issue.fixed_version.project == project
+        new_issue.fixed_version = self.versions.detect {|v| v.name == issue.fixed_version.name}
       end
-      # Reassign the category by name, since names are unique per
-      # project and the categories for self are not yet saved
+      # Reassign the category by name, since names are unique per project
       if issue.category
-        new_issue.category = self.issue_categories.select {|c| c.name == issue.category.name}.first
+        new_issue.category = self.issue_categories.detect {|c| c.name == issue.category.name}
       end
       # Parent issue
       if issue.parent_id
@@ -784,6 +801,11 @@ class Project < ActiveRecord::Base
       else
         issues_map[issue.id] = new_issue unless new_issue.new_record?
       end
+    end
+
+    # Restore locked/closed version statuses
+    version_statuses.each do |version, status|
+      version.update_attribute :status, status
     end
 
     # Relations after in case issues related each other
@@ -914,5 +936,29 @@ class Project < ActiveRecord::Base
       subproject.send :archive!
     end
     update_attribute :status, STATUS_ARCHIVED
+  end
+
+  def update_position_under_parent
+    set_or_update_position_under(parent)
+  end
+
+  # Inserts/moves the project so that target's children or root projects stay alphabetically sorted
+  def set_or_update_position_under(target_parent)
+    sibs = (target_parent.nil? ? self.class.roots : target_parent.children)
+    to_be_inserted_before = sibs.sort_by {|c| c.name.to_s.downcase}.detect {|c| c.name.to_s.downcase > name.to_s.downcase }
+
+    if to_be_inserted_before
+      move_to_left_of(to_be_inserted_before)
+    elsif target_parent.nil?
+      if sibs.empty?
+        # move_to_root adds the project in first (ie. left) position
+        move_to_root
+      else
+        move_to_right_of(sibs.last) unless self == sibs.last
+      end
+    else
+      # move_to_child_of adds the project in last (ie.right) position
+      move_to_child_of(target_parent)
+    end
   end
 end

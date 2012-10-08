@@ -1,5 +1,5 @@
 # Redmine - project management software
-# Copyright (C) 2006-2011  Jean-Philippe Lang
+# Copyright (C) 2006-2012  Jean-Philippe Lang
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -91,11 +91,12 @@ class MessagesControllerTest < ActionController::TestCase
   def test_post_new
     @request.session[:user_id] = 2
     ActionMailer::Base.deliveries.clear
-    Setting.notified_events = ['message_posted']
 
-    post :new, :board_id => 1,
+    with_settings :notified_events => %w(message_posted) do
+      post :new, :board_id => 1,
                :message => { :subject => 'Test created message',
                              :content => 'Message body'}
+    end
     message = Message.find_by_subject('Test created message')
     assert_not_nil message
     assert_redirected_to "/boards/1/topics/#{message.to_param}"
@@ -185,7 +186,10 @@ class MessagesControllerTest < ActionController::TestCase
     @request.session[:user_id] = 2
     xhr :get, :quote, :board_id => 1, :id => 3
     assert_response :success
-    assert_select_rjs :show, 'reply'
+    assert_equal 'text/javascript', response.content_type
+    assert_template 'quote'
+    assert_include 'RE: First post', response.body
+    assert_include '> An other reply', response.body
   end
 
   def test_preview_new

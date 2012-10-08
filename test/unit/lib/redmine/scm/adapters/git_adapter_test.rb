@@ -1,4 +1,19 @@
-# encoding: utf-8
+# Redmine - project management software
+# Copyright (C) 2006-2012  Jean-Philippe Lang
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 require File.expand_path('../../../../../../test_helper', __FILE__)
 begin
@@ -384,7 +399,7 @@ begin
         str_felix_hex  = FELIX_HEX.dup
         last_rev_author = last_rev.author
         if last_rev_author.respond_to?(:force_encoding)
-          last_rev_author.force_encoding('UTF-8')
+          str_felix_hex.force_encoding('ASCII-8BIT')
         end
         assert_equal "ed5bb786bbda2dee66a2d50faf51429dbc043a7b", last_rev.scmid
         assert_equal "ed5bb786bbda2dee66a2d50faf51429dbc043a7b", last_rev.identifier
@@ -472,6 +487,37 @@ begin
         end
       end
 
+      def test_entry
+        entry = @adapter.entry()
+        assert_equal "", entry.path
+        assert_equal "dir", entry.kind
+        entry = @adapter.entry('')
+        assert_equal "", entry.path
+        assert_equal "dir", entry.kind
+        assert_nil @adapter.entry('invalid')
+        assert_nil @adapter.entry('/invalid')
+        assert_nil @adapter.entry('/invalid/')
+        assert_nil @adapter.entry('invalid/invalid')
+        assert_nil @adapter.entry('invalid/invalid/')
+        assert_nil @adapter.entry('/invalid/invalid')
+        assert_nil @adapter.entry('/invalid/invalid/')
+        ["README", "/README"].each do |path|
+          entry = @adapter.entry(path, '7234cb2750b63f')
+          assert_equal "README", entry.path
+          assert_equal "file", entry.kind
+        end
+        ["sources", "/sources", "/sources/"].each do |path|
+          entry = @adapter.entry(path, '7234cb2750b63f')
+          assert_equal "sources", entry.path
+          assert_equal "dir", entry.kind
+        end
+        ["sources/watchers_controller.rb", "/sources/watchers_controller.rb"].each do |path|
+          entry = @adapter.entry(path, '7234cb2750b63f')
+          assert_equal "sources/watchers_controller.rb", entry.path
+          assert_equal "file", entry.kind
+        end
+      end
+
       def test_path_encoding_default_utf8
         adpt1 = Redmine::Scm::Adapters::GitAdapter.new(
                                   REPOSITORY_PATH
@@ -493,7 +539,7 @@ begin
 
       def test_cat_revision_invalid
         assert     @adapter.cat('README')
-        assert_nil @adapter.cat('README', 'abcd1234efgh')
+        assert_nil @adapter.cat('README', '1234abcd5678')
       end
 
       def test_diff_path_invalid
@@ -501,9 +547,9 @@ begin
       end
 
       def test_diff_revision_invalid
-        assert_nil @adapter.diff(nil, 'abcd1234efgh')
-        assert_nil @adapter.diff(nil, '713f4944648826f5', 'abcd1234efgh')
-        assert_nil @adapter.diff(nil, 'abcd1234efgh', '713f4944648826f5')
+        assert_nil @adapter.diff(nil, '1234abcd5678')
+        assert_nil @adapter.diff(nil, '713f4944648826f5', '1234abcd5678')
+        assert_nil @adapter.diff(nil, '1234abcd5678', '713f4944648826f5')
       end
 
       def test_annotate_path_invalid
@@ -512,7 +558,7 @@ begin
 
       def test_annotate_revision_invalid
         assert     @adapter.annotate('README')
-        assert_nil @adapter.annotate('README', 'abcd1234efgh')
+        assert_nil @adapter.annotate('README', '1234abcd5678')
       end
 
       private

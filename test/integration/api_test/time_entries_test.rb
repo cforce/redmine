@@ -1,5 +1,5 @@
 # Redmine - project management software
-# Copyright (C) 2006-2011  Jean-Philippe Lang
+# Copyright (C) 2006-2012  Jean-Philippe Lang
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -134,6 +134,7 @@ class ApiTest::TimeEntriesTest < ActionController::IntegrationTest
           put '/time_entries/2.xml', {:time_entry => {:comments => 'API Update'}}, credentials('jsmith')
         end
         assert_response :ok
+        assert_equal '', @response.body
         assert_equal 'API Update', TimeEntry.find(2).comments
       end
     end
@@ -157,6 +158,7 @@ class ApiTest::TimeEntriesTest < ActionController::IntegrationTest
         delete '/time_entries/2.xml', {}, credentials('jsmith')
       end
       assert_response :ok
+      assert_equal '', @response.body
       assert_nil TimeEntry.find_by_id(2)
     end
   end

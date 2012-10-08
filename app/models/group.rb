@@ -1,5 +1,5 @@
 # Redmine - project management software
-# Copyright (C) 2006-2011  Jean-Philippe Lang
+# Copyright (C) 2006-2012  Jean-Philippe Lang
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -16,6 +16,8 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 class Group < Principal
+  include Redmine::SafeAttributes
+
   has_and_belongs_to_many :users, :after_add => :user_added,
                                   :after_remove => :user_removed
 
@@ -27,11 +29,25 @@ class Group < Principal
 
   before_destroy :remove_references_before_destroy
 
+  scope :sorted, order("#{table_name}.lastname ASC")
+
+  safe_attributes 'name',
+    'user_ids',
+    'custom_field_values',
+    'custom_fields',
+    :if => lambda {|group, user| user.admin?}
+
   def to_s
     lastname.to_s
   end
 
-  alias :name :to_s
+  def name
+    lastname
+  end
+
+  def name=(arg)
+    self.lastname = arg
+  end
 
   def user_added(user)
     members.each do |member|

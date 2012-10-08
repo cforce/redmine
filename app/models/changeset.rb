@@ -1,5 +1,5 @@
 # Redmine - project management software
-# Copyright (C) 2006-2011  Jean-Philippe Lang
+# Copyright (C) 2006-2012  Jean-Philippe Lang
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -20,7 +20,7 @@ require 'iconv'
 class Changeset < ActiveRecord::Base
   belongs_to :repository
   belongs_to :user
-  has_many :changes, :dependent => :delete_all
+  has_many :filechanges, :class_name => 'Change', :dependent => :delete_all
   has_and_belongs_to_many :issues
   has_and_belongs_to_many :parents,
                           :class_name => "Changeset",
@@ -49,7 +49,8 @@ class Changeset < ActiveRecord::Base
   validates_uniqueness_of :revision, :scope => :repository_id
   validates_uniqueness_of :scmid, :scope => :repository_id, :allow_nil => true
 
-  named_scope :visible, lambda {|*args| { :include => {:repository => :project},
+  scope :visible,
+     lambda {|*args| { :include => {:repository => :project},
                                           :conditions => Project.allowed_to_condition(args.shift || User.current, :view_changesets, *args) } }
 
   after_create :scan_for_issues
@@ -161,7 +162,7 @@ class Changeset < ActiveRecord::Base
       tag = "#{repository.identifier}|#{tag}"
     end
     if ref_project && project && ref_project != project
-      tag = "#{project.identifier}:#{tag}" 
+      tag = "#{project.identifier}:#{tag}"
     end
     tag
   end
@@ -175,18 +176,12 @@ class Changeset < ActiveRecord::Base
 
   # Returns the previous changeset
   def previous
-    @previous ||= Changeset.find(:first,
-                    :conditions => ['id < ? AND repository_id = ?',
-                                    self.id, self.repository_id],
-                    :order => 'id DESC')
+    @previous ||= Changeset.where(["id < ? AND repository_id = ?", id, repository_id]).order('id DESC').first
   end
 
   # Returns the next changeset
   def next
-    @next ||= Changeset.find(:first,
-                    :conditions => ['id > ? AND repository_id = ?',
-                                    self.id, self.repository_id],
-                    :order => 'id ASC')
+    @next ||= Changeset.where(["id > ? AND repository_id = ?", id, repository_id]).order('id ASC').first
   end
 
   # Creates a new Change from it's common parameters

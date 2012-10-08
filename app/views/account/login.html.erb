@@ -1,7 +1,7 @@
 <%= call_hook :view_account_login_top %>
 <div id="login-form">
-<h1>Willkommen auf dem Produktkonfigurationsmanagment-Portal der Sparte Systemhaus im Deutschen Sparkassenverlag</h1>
-<% form_tag({:action=> "login"}) do %>
+<%= form_tag(signin_path) do %>
+<h1>Willkommen beim Produktkonfigurationsmanagment der Sparte Systemhaus im DSV</h1>
 <%= back_url_hidden_field_tag %>
 <table>
 <tr>
@@ -29,7 +29,7 @@
 <tr>
     <td align="left">
         <% if Setting.lost_password? %>
-            <%= link_to l(:label_password_lost), :controller => 'account', :action => 'lost_password' %>
+            <%= link_to l(:label_password_lost), lost_password_path %>
         <% end %>
     </td>
     <td align="right">
@@ -37,7 +37,7 @@
     </td>
 </tr>
 </table>
-<%= javascript_tag "Form.Element.focus('username');" %>
+<%= javascript_tag "$('#username').focus();" %>
 <% end %>
 </div>
 <div id="login-info">

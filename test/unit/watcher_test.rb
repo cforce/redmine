@@ -1,5 +1,5 @@
 # Redmine - project management software
-# Copyright (C) 2006-2011  Jean-Philippe Lang
+# Copyright (C) 2006-2012  Jean-Philippe Lang
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -152,6 +152,14 @@ class WatcherTest < ActiveSupport::TestCase
     end
 
     assert Issue.find(1).watched_by?(user)
+    assert !Issue.find(4).watched_by?(user)
+  end
+
+  def test_prune_all
+    user = User.find(9)
+    Watcher.new(:watchable => Issue.find(4), :user => User.find(9)).save(:validate => false)
+
+    assert Watcher.prune > 0
     assert !Issue.find(4).watched_by?(user)
   end
 end

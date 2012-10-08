@@ -1,7 +1,7 @@
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
+<!DOCTYPE html>
+<html lang="en">
 <head>
-<meta http-equiv="content-type" content="text/html; charset=utf-8" />
+<meta charset="utf-8" />
 <title><%=h html_title %></title>
 <!-- Fix für Seitenansichtsfehler im IE8. Hinzugefügt am 18.07.2011 -->
 <meta http-equiv="X-UA-Compatible" content="IE=EmulateIE8" />
@@ -10,20 +10,12 @@
 <meta http-equiv="X-UA-Compatible" content="IE=9; IE=8; IE=7; IE=EDGE" />
 <%= csrf_meta_tag %>
 <%= favicon %>
-<%= stylesheet_link_tag 'application', :media => 'all' %>
+<%= stylesheet_link_tag 'jquery/jquery-ui-1.8.21', 'application', :media => 'all' %>
 <%= stylesheet_link_tag 'rtl', :media => 'all' if l(:direction) == 'rtl' %>
 <%= javascript_heads %>
 <!-- jquery lib und tabslideout fuer slider eingebaut -->
-<script src="/javascripts/jquery/jquery-1.7.1.min.js" type="text/javascript"></script>
-<script src="/javascripts/jquery/jquery-ui-1.8.16.custom.min.js" type="text/javascript"></script>
 <script src="/javascripts/jquery/jquery.tabSlideOut.v1.3.js" type="text/javascript"></script>
 <%= heads_for_theme %>
-<!--[if IE 6]>
-    <style type="text/css">
-      * html body{ width: expression( document.documentElement.clientWidth < 900 ? '900px' : '100%' ); }
-      body {behavior: url(<%= stylesheet_path "csshover.htc" %>);}
-    </style>
-<![endif]-->
 <%= call_hook :view_layouts_base_html_head %>
 <!-- page specific tags -->
 <%= yield :header_tags -%>
@@ -35,17 +27,14 @@
     <div id="account">
         <%= render_menu :account_menu -%>
     </div>
-    <%= content_tag(
-           'div',
-           "#{l(:label_logged_as)} #{link_to_user(User.current, :format => :username)}".html_safe,
-           :id => 'loggedas') if User.current.logged? %>
+    <%= content_tag('div', "#{l(:label_logged_as)} #{link_to_user(User.current, :format => :username)}".html_safe, :id => 'loggedas') if User.current.logged? %>
     <%= render_menu :top_menu if User.current.logged? || !Setting.login_required? -%>
 </div>
 
 <div id="header">
     <% if User.current.logged? || !Setting.login_required? %>
     <div id="quick-search">
-        <% form_tag({:controller => 'search', :action => 'index', :id => @project}, :method => :get ) do %>
+        <%= form_tag({:controller => 'search', :action => 'index', :id => @project}, :method => :get ) do %>
         <%= hidden_field_tag(controller.default_search_scope, 1, :id => nil) if controller.default_search_scope %>
         <label for='q'>
           <%= link_to l(:label_search), {:controller => 'search', :action => 'index', :id => @project}, :accesskey => accesskey(:search) %>:
@@ -69,13 +58,10 @@
     <% end %>
 </div>
 
-<%= tag('div', {:id => 'main', :class => (has_content?(:sidebar) ? '' : 'nosidebar')}, true) %>
-<!-- class slide-out-div zum sidebar div hinzugefuegt-->
-    <div class="slide-out-div" id="sidebar">        
+<div id="main" class="<%= sidebar_content? ? '' : 'nosidebar' %>">
+    <div id="sidebar">
         <%= yield :sidebar %>
-        <%= call_hook :view_layouts_base_sidebar %>
-	<!--click event handler fuer slider eingebaut-->
-	<a class="handle" href="#"></a>
+        <%= view_layouts_base_sidebar_hook_response %>
     </div>
 
     <div id="content">

@@ -87,16 +87,16 @@ class Repository::Git < Repository
   end
 
   def find_changeset_by_name(name)
-    return nil if name.nil? || name.empty?
-    e = changesets.find(:first, :conditions => ['revision = ?', name.to_s])
-    return e if e
-    changesets.find(:first, :conditions => ['scmid LIKE ?', "#{name}%"])
+    if name.present?
+      changesets.where(:revision => name.to_s).first ||
+        changesets.where('scmid LIKE ?', "#{name}%").first
+    end
   end
 
   def entries(path=nil, identifier=nil)
-    scm.entries(path,
-                identifier,
-                options = {:report_last_commit => extra_report_last_commit})
+    entries = scm.entries(path, identifier, :report_last_commit => extra_report_last_commit)
+    load_entries_changesets(entries)
+    entries
   end
 
   # With SCMs that have a sequential commit numbering,

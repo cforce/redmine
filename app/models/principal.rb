@@ -1,5 +1,5 @@
 # Redmine - project management software
-# Copyright (C) 2006-2011  Jean-Philippe Lang
+# Copyright (C) 2006-2012  Jean-Philippe Lang
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -16,17 +16,17 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 class Principal < ActiveRecord::Base
-  set_table_name "#{table_name_prefix}users#{table_name_suffix}"
+  self.table_name = "#{table_name_prefix}users#{table_name_suffix}"
 
   has_many :members, :foreign_key => 'user_id', :dependent => :destroy
-  has_many :memberships, :class_name => 'Member', :foreign_key => 'user_id', :include => [ :project, :roles ], :conditions => "#{Project.table_name}.status=#{Project::STATUS_ACTIVE}", :order => "#{Project.table_name}.name"
+  has_many :memberships, :class_name => 'Member', :foreign_key => 'user_id', :include => [ :project, :roles ], :conditions => "#{Project.table_name}.status<>#{Project::STATUS_ARCHIVED}", :order => "#{Project.table_name}.name"
   has_many :projects, :through => :memberships
   has_many :issue_categories, :foreign_key => 'assigned_to_id', :dependent => :nullify
 
   # Groups and active users
-  named_scope :active, :conditions => "#{Principal.table_name}.status = 1"
+  scope :active, :conditions => "#{Principal.table_name}.status = 1"
 
-  named_scope :like, lambda {|q|
+  scope :like, lambda {|q|
     if q.blank?
       {}
     else
@@ -44,7 +44,7 @@ class Principal < ActiveRecord::Base
   }
 
   # Principals that are members of a collection of projects
-  named_scope :member_of, lambda {|projects|
+  scope :member_of, lambda {|projects|
     projects = [projects] unless projects.is_a?(Array)
     if projects.empty?
       {:conditions => "1=0"}
@@ -54,7 +54,7 @@ class Principal < ActiveRecord::Base
     end
   }
   # Principals that are not members of projects
-  named_scope :not_member_of, lambda {|projects|
+  scope :not_member_of, lambda {|projects|
     projects = [projects] unless projects.is_a?(Array)
     if projects.empty?
       {:conditions => "1=0"}

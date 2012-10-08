@@ -68,7 +68,7 @@ class ContextMenusControllerTest < ActionController::TestCase
     assert_not_nil assigns(:issues)
     assert_equal [1, 2], assigns(:issues).map(&:id).sort
 
-    ids = assigns(:issues).map(&:id).map {|i| "ids%5B%5D=#{i}"}.join('&amp;')
+    ids = assigns(:issues).map(&:id).sort.map {|i| "ids%5B%5D=#{i}"}.join('&amp;')
     assert_tag :tag => 'a', :content => 'Edit',
                             :attributes => { :href => "/issues/bulk_edit?#{ids}",
                                              :class => 'icon-edit' }
@@ -98,7 +98,7 @@ class ContextMenusControllerTest < ActionController::TestCase
     assert_not_nil assigns(:issues)
     assert_equal [1, 2, 6], assigns(:issues).map(&:id).sort
 
-    ids = assigns(:issues).map(&:id).map {|i| "ids%5B%5D=#{i}"}.join('&amp;')
+    ids = assigns(:issues).map(&:id).sort.map {|i| "ids%5B%5D=#{i}"}.join('&amp;')
     assert_tag :tag => 'a', :content => 'Edit',
                             :attributes => { :href => "/issues/bulk_edit?#{ids}",
                                              :class => 'icon-edit' }
@@ -221,6 +221,18 @@ class ContextMenusControllerTest < ActionController::TestCase
     assert_tag :tag => 'a', :content => / me /,
                             :attributes => { :href => '/issues/bulk_update?ids%5B%5D=1&amp;issue%5Bassigned_to_id%5D=2',
                                              :class => '' }
+  end
+
+  def test_context_menu_should_propose_shared_versions_for_issues_from_different_projects
+    @request.session[:user_id] = 2
+    version = Version.create!(:name => 'Shared', :sharing => 'system', :project_id => 1)
+
+    get :issues, :ids => [1, 4]
+    assert_response :success
+    assert_template 'context_menu'
+
+    assert_include version, assigns(:versions)
+    assert_tag :tag => 'a', :content => 'eCookbook - Shared'
   end
 
   def test_context_menu_issue_visibility

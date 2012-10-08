@@ -1,5 +1,5 @@
 # Redmine - project management software
-# Copyright (C) 2006-2011  Jean-Philippe Lang
+# Copyright (C) 2006-2012  Jean-Philippe Lang
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -112,6 +112,16 @@ class AuthSourceLdapTest < ActiveSupport::TestCase
           assert @auth.authenticate('example1','123456')
           assert_nil @auth.authenticate('edavis', '123456')
         end
+      end
+    end
+
+    def test_authenticate_should_timeout
+      auth_source = AuthSourceLdap.find(1)
+      auth_source.timeout = 1
+      def auth_source.initialize_ldap_con(*args); sleep(5); end
+
+      assert_raise AuthSourceTimeoutException do
+        auth_source.authenticate 'example1', '123456'
       end
     end
   else

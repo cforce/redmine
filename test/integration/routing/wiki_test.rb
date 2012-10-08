@@ -1,5 +1,5 @@
 # Redmine - project management software
-# Copyright (C) 2006-2011  Jean-Philippe Lang
+# Copyright (C) 2006-2012  Jean-Philippe Lang
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -90,11 +90,13 @@ class RoutingWikiTest < ActionController::IntegrationTest
         { :controller => 'wiki', :action => 'rename', :project_id => '22',
           :id => 'ladida' }
       )
-    assert_routing(
-        { :method => 'post', :path => "/projects/567/wiki/CookBook_documentation/preview" },
-        { :controller => 'wiki', :action => 'preview', :project_id => '567',
-          :id => 'CookBook_documentation' }
-      )
+    ["post", "put"].each do |method|
+      assert_routing(
+          { :method => method, :path => "/projects/567/wiki/CookBook_documentation/preview" },
+          { :controller => 'wiki', :action => 'preview', :project_id => '567',
+            :id => 'CookBook_documentation' }
+        )
+    end
     assert_routing(
         { :method => 'post', :path => "/projects/22/wiki/ladida/rename" },
         { :controller => 'wiki', :action => 'rename', :project_id => '22',

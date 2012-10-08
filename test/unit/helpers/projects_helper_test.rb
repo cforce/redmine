@@ -1,5 +1,5 @@
 # Redmine - project management software
-# Copyright (C) 2006-2011  Jean-Philippe Lang
+# Copyright (C) 2006-2012  Jean-Philippe Lang
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -72,6 +72,6 @@ class ProjectsHelperTest < ActionView::TestCase
 
   def test_version_options_for_select_with_no_versions
     assert_equal '', version_options_for_select([])
-    assert_equal '<option value="1" selected="selected">0.1</option>', version_options_for_select([], Version.find(1))
+    assert_equal '', version_options_for_select([], Version.find(1))
   end
 end

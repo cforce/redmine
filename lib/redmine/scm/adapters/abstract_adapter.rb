@@ -1,5 +1,5 @@
 # Redmine - project management software
-# Copyright (C) 2006-2011  Jean-Philippe Lang
+# Copyright (C) 2006-2012  Jean-Philippe Lang
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -267,11 +267,18 @@ module Redmine
             nil
           end
         end
+
+        def parse_xml(xml)
+          if RUBY_PLATFORM == 'java'
+            xml = xml.sub(%r{<\?xml[^>]*\?>}, '')
+          end
+          ActiveSupport::XmlMini.parse(xml)
+        end
       end
 
       class Entries < Array
         def sort_by_name
-          sort {|x,y|
+          dup.sort! {|x,y|
             if x.kind == y.kind
               x.name.to_s <=> y.name.to_s
             else
@@ -294,7 +301,8 @@ module Redmine
       end
 
       class Entry
-        attr_accessor :name, :path, :kind, :size, :lastrev
+        attr_accessor :name, :path, :kind, :size, :lastrev, :changeset
+
         def initialize(attributes={})
           self.name = attributes[:name] if attributes[:name]
           self.path = attributes[:path] if attributes[:path]
@@ -313,6 +321,14 @@ module Redmine
 
         def is_text?
           Redmine::MimeType.is_type?('text', name)
+        end
+
+        def author
+          if changeset
+            changeset.author.to_s
+          elsif lastrev
+            Redmine::CodesetUtil.replace_invalid_utf8(lastrev.author.to_s.split('<').first)
+          end
         end
       end
 
@@ -349,6 +365,18 @@ module Redmine
         # Returns the readable identifier.
         def format_identifier
           self.identifier.to_s
+        end
+
+        def ==(other)
+          if other.nil?
+            false
+          elsif scmid.present?
+            scmid == other.scmid
+          elsif identifier.present?
+            identifier == other.identifier
+          elsif revision.present?
+            revision == other.revision
+          end
         end
       end
 

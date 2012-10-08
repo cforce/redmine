@@ -1,5 +1,5 @@
 # Redmine - project management software
-# Copyright (C) 2006-2011  Jean-Philippe Lang
+# Copyright (C) 2006-2012  Jean-Philippe Lang
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -25,7 +25,7 @@ class BoardsController < ApplicationController
   helper :watchers
 
   def index
-    @boards = @project.boards
+    @boards = @project.boards.includes(:last_message => :author).all
     # show the board if there is only one
     if @boards.size == 1
       @board = @boards.first
@@ -43,10 +43,10 @@ class BoardsController < ApplicationController
 
         @topic_count = @board.topics.count
         @topic_pages = Paginator.new self, @topic_count, per_page_option, params['page']
-        @topics =  @board.topics.find :all, :order => ["#{Message.table_name}.sticky DESC", sort_clause].compact.join(', '),
+        @topics =  @board.topics.reorder("#{Message.table_name}.sticky DESC").order(sort_clause).all(
                                       :include => [:author, {:last_reply => :author}],
                                       :limit  =>  @topic_pages.items_per_page,
-                                      :offset =>  @topic_pages.current.offset
+                                      :offset =>  @topic_pages.current.offset)
         @message = Message.new(:board => @board)
         render :action => 'show', :layout => !request.xhr?
       }

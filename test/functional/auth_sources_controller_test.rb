@@ -1,5 +1,5 @@
 # Redmine - project management software
-# Copyright (C) 2006-2011  Jean-Philippe Lang
+# Copyright (C) 2006-2012  Jean-Philippe Lang
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -65,7 +65,7 @@ class AuthSourcesControllerTest < ActionController::TestCase
       assert_response :success
       assert_template 'new'
     end
-    assert_error_tag :content => /host can't be blank/i
+    assert_error_tag :content => /host can&#x27;t be blank/i
   end
 
   def test_edit
@@ -90,7 +90,7 @@ class AuthSourcesControllerTest < ActionController::TestCase
     put :update, :id => 1, :auth_source => {:name => 'Renamed', :host => '', :port => '389', :attr_login => 'uid'}
     assert_response :success
     assert_template 'edit'
-    assert_error_tag :content => /host can't be blank/i
+    assert_error_tag :content => /host can&#x27;t be blank/i
   end
 
   def test_destroy

@@ -75,6 +75,17 @@ class CustomFieldTest < ActiveSupport::TestCase
     assert_equal ["One value", "And another one"], field.possible_values
   end
 
+  if "string".respond_to?(:encoding)
+    def test_possible_values_stored_as_binary_should_be_utf8_encoded
+      field = CustomField.find(11)
+      assert_kind_of Array, field.possible_values
+      assert field.possible_values.size > 0
+      field.possible_values.each do |value|
+        assert_equal "UTF-8", value.encoding.name
+      end
+    end
+  end
+
   def test_destroy
     field = CustomField.find(1)
     assert field.destroy
@@ -190,5 +201,15 @@ class CustomFieldTest < ActiveSupport::TestCase
 
     assert f.valid_field_value?(['value1', 'value2'])
     assert !f.valid_field_value?(['value1', 'abc'])
+  end
+
+  def test_value_class_should_return_the_class_used_for_fields_values
+    assert_equal User, CustomField.new(:field_format => 'user').value_class
+    assert_equal Version, CustomField.new(:field_format => 'version').value_class
+  end
+
+  def test_value_class_should_return_nil_for_other_fields
+    assert_nil CustomField.new(:field_format => 'text').value_class
+    assert_nil CustomField.new.value_class
   end
 end

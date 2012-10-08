@@ -1,5 +1,5 @@
 # Redmine - project management software
-# Copyright (C) 2006-2011  Jean-Philippe Lang
+# Copyright (C) 2006-2012  Jean-Philippe Lang
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -34,6 +34,10 @@ class PreviewsController < ApplicationController
   end
 
   def news
+    if params[:id].present? && news = News.visible.find_by_id(params[:id])
+      @previewed = news
+      @attachments = news.attachments
+    end
     @text = (params[:news] ? params[:news][:description] : nil)
     render :partial => 'common/preview'
   end

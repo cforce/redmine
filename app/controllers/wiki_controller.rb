@@ -1,5 +1,5 @@
 # Redmine - project management software
-# Copyright (C) 2006-2011  Jean-Philippe Lang
+# Copyright (C) 2006-2012  Jean-Philippe Lang
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -109,7 +109,7 @@ class WikiController < ApplicationController
 
     # To prevent StaleObjectError exception when reverting to a previous version
     @content.version = @page.content.version
-    
+
     @text = @content.text
     if params[:section].present? && Redmine::WikiFormatting.supports_section_edit?
       @section = params[:section].to_i
@@ -162,6 +162,8 @@ class WikiController < ApplicationController
   rescue ActiveRecord::StaleObjectError, Redmine::WikiFormatting::StaleSectionError
     # Optimistic locking exception
     flash.now[:error] = l(:notice_locking_conflict)
+    render :action => 'edit'
+  rescue ActiveRecord::RecordNotSaved
     render :action => 'edit'
   end
 

@@ -25,11 +25,15 @@ class IssueTest < ActiveSupport::TestCase
            :versions,
            :issue_statuses, :issue_categories, :issue_relations, :workflows,
            :enumerations,
-           :issues,
+           :issues, :journals, :journal_details,
            :custom_fields, :custom_fields_projects, :custom_fields_trackers, :custom_values,
            :time_entries
 
   include Redmine::I18n
+
+  def teardown
+    User.current = nil
+  end
 
   def test_create
     issue = Issue.new(:project_id => 1, :tracker_id => 1, :author_id => 3,
@@ -47,6 +51,7 @@ class IssueTest < ActiveSupport::TestCase
                       :subject => 'test_create')
     assert issue.save
     assert issue.description.nil?
+    assert_nil issue.estimated_hours
   end
 
   def test_create_with_required_custom_field
@@ -100,24 +105,26 @@ class IssueTest < ActiveSupport::TestCase
     assert_visibility_match User.anonymous, issues
   end
 
-  def test_visible_scope_for_anonymous_with_own_issues_visibility
-    Role.anonymous.update_attribute :issues_visibility, 'own'
-    Issue.create!(:project_id => 1, :tracker_id => 1,
-                  :author_id => User.anonymous.id,
-                  :subject => 'Issue by anonymous')
-
-    issues = Issue.visible(User.anonymous).all
-    assert issues.any?
-    assert_nil issues.detect {|issue| issue.author != User.anonymous}
-    assert_visibility_match User.anonymous, issues
-  end
-
   def test_visible_scope_for_anonymous_without_view_issues_permissions
     # Anonymous user should not see issues without permission
     Role.anonymous.remove_permission!(:view_issues)
     issues = Issue.visible(User.anonymous).all
     assert issues.empty?
     assert_visibility_match User.anonymous, issues
+  end
+
+  def test_anonymous_should_not_see_private_issues_with_issues_visibility_set_to_default
+    assert Role.anonymous.update_attribute(:issues_visibility, 'default')
+    issue = Issue.generate_for_project!(Project.find(1), :author => User.anonymous, :assigned_to => User.anonymous, :is_private => true)
+    assert_nil Issue.where(:id => issue.id).visible(User.anonymous).first
+    assert !issue.visible?(User.anonymous)
+  end
+
+  def test_anonymous_should_not_see_private_issues_with_issues_visibility_set_to_own
+    assert Role.anonymous.update_attribute(:issues_visibility, 'own')
+    issue = Issue.generate_for_project!(Project.find(1), :author => User.anonymous, :assigned_to => User.anonymous, :is_private => true)
+    assert_nil Issue.where(:id => issue.id).visible(User.anonymous).first
+    assert !issue.visible?(User.anonymous)
   end
 
   def test_visible_scope_for_non_member
@@ -362,24 +369,24 @@ class IssueTest < ActiveSupport::TestCase
   end
 
   def test_new_statuses_allowed_to
-    Workflow.delete_all
+    WorkflowTransition.delete_all
 
-    Workflow.create!(:role_id => 1, :tracker_id => 1, :old_status_id => 1, :new_status_id => 2, :author => false, :assignee => false)
-    Workflow.create!(:role_id => 1, :tracker_id => 1, :old_status_id => 1, :new_status_id => 3, :author => true, :assignee => false)
-    Workflow.create!(:role_id => 1, :tracker_id => 1, :old_status_id => 1, :new_status_id => 4, :author => false, :assignee => true)
-    Workflow.create!(:role_id => 1, :tracker_id => 1, :old_status_id => 1, :new_status_id => 5, :author => true, :assignee => true)
+    WorkflowTransition.create!(:role_id => 1, :tracker_id => 1, :old_status_id => 1, :new_status_id => 2, :author => false, :assignee => false)
+    WorkflowTransition.create!(:role_id => 1, :tracker_id => 1, :old_status_id => 1, :new_status_id => 3, :author => true, :assignee => false)
+    WorkflowTransition.create!(:role_id => 1, :tracker_id => 1, :old_status_id => 1, :new_status_id => 4, :author => false, :assignee => true)
+    WorkflowTransition.create!(:role_id => 1, :tracker_id => 1, :old_status_id => 1, :new_status_id => 5, :author => true, :assignee => true)
     status = IssueStatus.find(1)
     role = Role.find(1)
     tracker = Tracker.find(1)
     user = User.find(2)
 
-    issue = Issue.generate!(:tracker => tracker, :status => status, :project_id => 1)
+    issue = Issue.generate!(:tracker => tracker, :status => status, :project_id => 1, :author_id => 1)
     assert_equal [1, 2], issue.new_statuses_allowed_to(user).map(&:id)
 
     issue = Issue.generate!(:tracker => tracker, :status => status, :project_id => 1, :author => user)
     assert_equal [1, 2, 3, 5], issue.new_statuses_allowed_to(user).map(&:id)
 
-    issue = Issue.generate!(:tracker => tracker, :status => status, :project_id => 1, :assigned_to => user)
+    issue = Issue.generate!(:tracker => tracker, :status => status, :project_id => 1, :author_id => 1, :assigned_to => user)
     assert_equal [1, 2, 4, 5], issue.new_statuses_allowed_to(user).map(&:id)
 
     issue = Issue.generate!(:tracker => tracker, :status => status, :project_id => 1, :author => user, :assigned_to => user)
@@ -390,7 +397,7 @@ class IssueTest < ActiveSupport::TestCase
     admin = User.find(1)
     issue = Issue.find(1)
     assert !admin.member_of?(issue.project)
-    expected_statuses = [issue.status] + Workflow.find_all_by_old_status_id(issue.status_id).map(&:new_status).uniq.sort
+    expected_statuses = [issue.status] + WorkflowTransition.find_all_by_old_status_id(issue.status_id).map(&:new_status).uniq.sort
 
     assert_equal expected_statuses, issue.new_statuses_allowed_to(admin)
   end
@@ -401,6 +408,211 @@ class IssueTest < ActiveSupport::TestCase
 
     issue = Issue.find(2).copy
     assert_equal [1, 2], issue.new_statuses_allowed_to(User.find(2)).map(&:id)
+  end
+
+  def test_safe_attributes_names_should_not_include_disabled_field
+    tracker = Tracker.new(:core_fields => %w(assigned_to_id fixed_version_id))
+
+    issue = Issue.new(:tracker => tracker)
+    assert_include 'tracker_id', issue.safe_attribute_names
+    assert_include 'status_id', issue.safe_attribute_names
+    assert_include 'subject', issue.safe_attribute_names
+    assert_include 'description', issue.safe_attribute_names
+    assert_include 'custom_field_values', issue.safe_attribute_names
+    assert_include 'custom_fields', issue.safe_attribute_names
+    assert_include 'lock_version', issue.safe_attribute_names
+
+    tracker.core_fields.each do |field|
+      assert_include field, issue.safe_attribute_names
+    end
+
+    tracker.disabled_core_fields.each do |field|
+      assert_not_include field, issue.safe_attribute_names
+    end
+  end
+
+  def test_safe_attributes_should_ignore_disabled_fields
+    tracker = Tracker.find(1)
+    tracker.core_fields = %w(assigned_to_id due_date)
+    tracker.save!
+
+    issue = Issue.new(:tracker => tracker)
+    issue.safe_attributes = {'start_date' => '2012-07-14', 'due_date' => '2012-07-14'}
+    assert_nil issue.start_date
+    assert_equal Date.parse('2012-07-14'), issue.due_date
+  end
+
+  def test_safe_attributes_should_accept_target_tracker_enabled_fields
+    source = Tracker.find(1)
+    source.core_fields = []
+    source.save!
+    target = Tracker.find(2)
+    target.core_fields = %w(assigned_to_id due_date)
+    target.save!
+
+    issue = Issue.new(:tracker => source)
+    issue.safe_attributes = {'tracker_id' => 2, 'due_date' => '2012-07-14'}
+    assert_equal target, issue.tracker
+    assert_equal Date.parse('2012-07-14'), issue.due_date
+  end
+
+  def test_safe_attributes_should_not_include_readonly_fields
+    WorkflowPermission.delete_all
+    WorkflowPermission.create!(:old_status_id => 1, :tracker_id => 1, :role_id => 1, :field_name => 'due_date', :rule => 'readonly')
+    user = User.find(2)
+
+    issue = Issue.new(:project_id => 1, :tracker_id => 1)
+    assert_equal %w(due_date), issue.read_only_attribute_names(user)
+    assert_not_include 'due_date', issue.safe_attribute_names(user)
+
+    issue.send :safe_attributes=, {'start_date' => '2012-07-14', 'due_date' => '2012-07-14'}, user
+    assert_equal Date.parse('2012-07-14'), issue.start_date
+    assert_nil issue.due_date
+  end
+
+  def test_safe_attributes_should_not_include_readonly_custom_fields
+    cf1 = IssueCustomField.create!(:name => 'Writable field', :field_format => 'string', :is_for_all => true, :tracker_ids => [1])
+    cf2 = IssueCustomField.create!(:name => 'Readonly field', :field_format => 'string', :is_for_all => true, :tracker_ids => [1])
+
+    WorkflowPermission.delete_all
+    WorkflowPermission.create!(:old_status_id => 1, :tracker_id => 1, :role_id => 1, :field_name => cf2.id.to_s, :rule => 'readonly')
+    user = User.find(2)
+
+    issue = Issue.new(:project_id => 1, :tracker_id => 1)
+    assert_equal [cf2.id.to_s], issue.read_only_attribute_names(user)
+    assert_not_include cf2.id.to_s, issue.safe_attribute_names(user)
+
+    issue.send :safe_attributes=, {'custom_field_values' => {cf1.id.to_s => 'value1', cf2.id.to_s => 'value2'}}, user
+    assert_equal 'value1', issue.custom_field_value(cf1)
+    assert_nil issue.custom_field_value(cf2)
+
+    issue.send :safe_attributes=, {'custom_fields' => [{'id' => cf1.id.to_s, 'value' => 'valuea'}, {'id' => cf2.id.to_s, 'value' => 'valueb'}]}, user
+    assert_equal 'valuea', issue.custom_field_value(cf1)
+    assert_nil issue.custom_field_value(cf2)
+  end
+
+  def test_editable_custom_field_values_should_return_non_readonly_custom_values
+    cf1 = IssueCustomField.create!(:name => 'Writable field', :field_format => 'string', :is_for_all => true, :tracker_ids => [1, 2])
+    cf2 = IssueCustomField.create!(:name => 'Readonly field', :field_format => 'string', :is_for_all => true, :tracker_ids => [1, 2])
+
+    WorkflowPermission.delete_all
+    WorkflowPermission.create!(:old_status_id => 1, :tracker_id => 1, :role_id => 1, :field_name => cf2.id.to_s, :rule => 'readonly')
+    user = User.find(2)
+
+    issue = Issue.new(:project_id => 1, :tracker_id => 1)
+    values = issue.editable_custom_field_values(user)
+    assert values.detect {|value| value.custom_field == cf1}
+    assert_nil values.detect {|value| value.custom_field == cf2}
+
+    issue.tracker_id = 2
+    values = issue.editable_custom_field_values(user)
+    assert values.detect {|value| value.custom_field == cf1}
+    assert values.detect {|value| value.custom_field == cf2}
+  end
+
+  def test_safe_attributes_should_accept_target_tracker_writable_fields
+    WorkflowPermission.delete_all
+    WorkflowPermission.create!(:old_status_id => 1, :tracker_id => 1, :role_id => 1, :field_name => 'due_date', :rule => 'readonly')
+    WorkflowPermission.create!(:old_status_id => 1, :tracker_id => 2, :role_id => 1, :field_name => 'start_date', :rule => 'readonly')
+    user = User.find(2)
+
+    issue = Issue.new(:project_id => 1, :tracker_id => 1, :status_id => 1)
+
+    issue.send :safe_attributes=, {'start_date' => '2012-07-12', 'due_date' => '2012-07-14'}, user
+    assert_equal Date.parse('2012-07-12'), issue.start_date
+    assert_nil issue.due_date
+
+    issue.send :safe_attributes=, {'start_date' => '2012-07-15', 'due_date' => '2012-07-16', 'tracker_id' => 2}, user
+    assert_equal Date.parse('2012-07-12'), issue.start_date
+    assert_equal Date.parse('2012-07-16'), issue.due_date
+  end
+
+  def test_safe_attributes_should_accept_target_status_writable_fields
+    WorkflowPermission.delete_all
+    WorkflowPermission.create!(:old_status_id => 1, :tracker_id => 1, :role_id => 1, :field_name => 'due_date', :rule => 'readonly')
+    WorkflowPermission.create!(:old_status_id => 2, :tracker_id => 1, :role_id => 1, :field_name => 'start_date', :rule => 'readonly')
+    user = User.find(2)
+
+    issue = Issue.new(:project_id => 1, :tracker_id => 1, :status_id => 1)
+
+    issue.send :safe_attributes=, {'start_date' => '2012-07-12', 'due_date' => '2012-07-14'}, user
+    assert_equal Date.parse('2012-07-12'), issue.start_date
+    assert_nil issue.due_date
+
+    issue.send :safe_attributes=, {'start_date' => '2012-07-15', 'due_date' => '2012-07-16', 'status_id' => 2}, user
+    assert_equal Date.parse('2012-07-12'), issue.start_date
+    assert_equal Date.parse('2012-07-16'), issue.due_date
+  end
+
+  def test_required_attributes_should_be_validated
+    cf = IssueCustomField.create!(:name => 'Foo', :field_format => 'string', :is_for_all => true, :tracker_ids => [1, 2])
+
+    WorkflowPermission.delete_all
+    WorkflowPermission.create!(:old_status_id => 1, :tracker_id => 1, :role_id => 1, :field_name => 'due_date', :rule => 'required')
+    WorkflowPermission.create!(:old_status_id => 1, :tracker_id => 1, :role_id => 1, :field_name => 'category_id', :rule => 'required')
+    WorkflowPermission.create!(:old_status_id => 1, :tracker_id => 1, :role_id => 1, :field_name => cf.id.to_s, :rule => 'required')
+
+    WorkflowPermission.create!(:old_status_id => 1, :tracker_id => 2, :role_id => 1, :field_name => 'start_date', :rule => 'required')
+    WorkflowPermission.create!(:old_status_id => 1, :tracker_id => 2, :role_id => 1, :field_name => cf.id.to_s, :rule => 'required')
+    user = User.find(2)
+
+    issue = Issue.new(:project_id => 1, :tracker_id => 1, :status_id => 1, :subject => 'Required fields', :author => user)
+    assert_equal [cf.id.to_s, "category_id", "due_date"], issue.required_attribute_names(user).sort
+    assert !issue.save, "Issue was saved"
+    assert_equal ["Category can't be blank", "Due date can't be blank", "Foo can't be blank"], issue.errors.full_messages.sort
+
+    issue.tracker_id = 2
+    assert_equal [cf.id.to_s, "start_date"], issue.required_attribute_names(user).sort
+    assert !issue.save, "Issue was saved"
+    assert_equal ["Foo can't be blank", "Start date can't be blank"], issue.errors.full_messages.sort
+
+    issue.start_date = Date.today
+    issue.custom_field_values = {cf.id.to_s => 'bar'}
+    assert issue.save
+  end
+
+  def test_required_attribute_names_for_multiple_roles_should_intersect_rules
+    WorkflowPermission.delete_all
+    WorkflowPermission.create!(:old_status_id => 1, :tracker_id => 1, :role_id => 1, :field_name => 'due_date', :rule => 'required')
+    WorkflowPermission.create!(:old_status_id => 1, :tracker_id => 1, :role_id => 1, :field_name => 'start_date', :rule => 'required')
+    user = User.find(2)
+    member = Member.find(1)
+    issue = Issue.new(:project_id => 1, :tracker_id => 1, :status_id => 1)
+
+    assert_equal %w(due_date start_date), issue.required_attribute_names(user).sort
+
+    member.role_ids = [1, 2]
+    member.save!
+    assert_equal [], issue.required_attribute_names(user.reload)
+
+    WorkflowPermission.create!(:old_status_id => 1, :tracker_id => 1, :role_id => 2, :field_name => 'due_date', :rule => 'required')
+    assert_equal %w(due_date), issue.required_attribute_names(user)
+
+    member.role_ids = [1, 2, 3]
+    member.save!
+    assert_equal [], issue.required_attribute_names(user.reload)
+
+    WorkflowPermission.create!(:old_status_id => 1, :tracker_id => 1, :role_id => 2, :field_name => 'due_date', :rule => 'readonly')
+    # required + readonly => required
+    assert_equal %w(due_date), issue.required_attribute_names(user)
+  end
+
+  def test_read_only_attribute_names_for_multiple_roles_should_intersect_rules
+    WorkflowPermission.delete_all
+    WorkflowPermission.create!(:old_status_id => 1, :tracker_id => 1, :role_id => 1, :field_name => 'due_date', :rule => 'readonly')
+    WorkflowPermission.create!(:old_status_id => 1, :tracker_id => 1, :role_id => 1, :field_name => 'start_date', :rule => 'readonly')
+    user = User.find(2)
+    member = Member.find(1)
+    issue = Issue.new(:project_id => 1, :tracker_id => 1, :status_id => 1)
+
+    assert_equal %w(due_date start_date), issue.read_only_attribute_names(user).sort
+
+    member.role_ids = [1, 2]
+    member.save!
+    assert_equal [], issue.read_only_attribute_names(user.reload)
+
+    WorkflowPermission.create!(:old_status_id => 1, :tracker_id => 1, :role_id => 2, :field_name => 'due_date', :rule => 'readonly')
+    assert_equal %w(due_date), issue.read_only_attribute_names(user)
   end
 
   def test_copy
@@ -424,6 +636,54 @@ class IssueTest < ActiveSupport::TestCase
     assert_equal orig.status, issue.status
   end
 
+  def test_copy_should_add_relation_with_copied_issue
+    copied = Issue.find(1)
+    issue = Issue.new.copy_from(copied)
+    assert issue.save
+    issue.reload
+
+    assert_equal 1, issue.relations.size
+    relation = issue.relations.first
+    assert_equal 'copied_to', relation.relation_type
+    assert_equal copied, relation.issue_from
+    assert_equal issue, relation.issue_to
+  end
+
+  def test_copy_should_copy_subtasks
+    issue = Issue.generate_with_descendants!(Project.find(1), :subject => 'Parent')
+
+    copy = issue.reload.copy
+    copy.author = User.find(7)
+    assert_difference 'Issue.count', 1+issue.descendants.count do
+      assert copy.save
+    end
+    copy.reload
+    assert_equal %w(Child1 Child2), copy.children.map(&:subject).sort
+    child_copy = copy.children.detect {|c| c.subject == 'Child1'}
+    assert_equal %w(Child11), child_copy.children.map(&:subject).sort
+    assert_equal copy.author, child_copy.author
+  end
+
+  def test_copy_should_copy_subtasks_to_target_project
+    issue = Issue.generate_with_descendants!(Project.find(1), :subject => 'Parent')
+
+    copy = issue.copy(:project_id => 3)
+    assert_difference 'Issue.count', 1+issue.descendants.count do
+      assert copy.save
+    end
+    assert_equal [3], copy.reload.descendants.map(&:project_id).uniq
+  end
+
+  def test_copy_should_not_copy_subtasks_twice_when_saving_twice
+    issue = Issue.generate_with_descendants!(Project.find(1), :subject => 'Parent')
+
+    copy = issue.reload.copy
+    assert_difference 'Issue.count', 1+issue.descendants.count do
+      assert copy.save
+      assert copy.save
+    end
+  end
+
   def test_should_not_call_after_project_change_on_creation
     issue = Issue.new(:project_id => 1, :tracker_id => 1, :status_id => 1, :subject => 'Test', :author_id => 1)
     issue.expects(:after_project_change).never
@@ -443,6 +703,19 @@ class IssueTest < ActiveSupport::TestCase
     issue.project = Project.find(2)
     issue.expects(:after_project_change).once
     issue.save!
+  end
+
+  def test_adding_journal_should_update_timestamp
+    issue = Issue.find(1)
+    updated_on_was = issue.updated_on
+
+    issue.init_journal(User.first, "Adding notes")
+    assert_difference 'Journal.count' do
+      assert issue.save
+    end
+    issue.reload
+
+    assert_not_equal updated_on_was, issue.updated_on
   end
 
   def test_should_close_duplicates
@@ -535,6 +808,26 @@ class IssueTest < ActiveSupport::TestCase
     issue = Issue.find(12)
     assert_equal 'locked', issue.fixed_version.status
     issue.status_id = 1
+    assert issue.save
+  end
+
+  def test_should_not_be_able_to_keep_unshared_version_when_changing_project
+    issue = Issue.find(2)
+    assert_equal 2, issue.fixed_version_id
+    issue.project_id = 3
+    assert_nil issue.fixed_version_id
+    issue.fixed_version_id = 2
+    assert !issue.save
+    assert_include 'Target version is not included in the list', issue.errors.full_messages
+  end
+
+  def test_should_keep_shared_version_when_changing_project
+    Version.find(2).update_attribute :sharing, 'tree'
+ 
+    issue = Issue.find(2)
+    assert_equal 2, issue.fixed_version_id
+    issue.project_id = 3
+    assert_equal 2, issue.fixed_version_id
     assert issue.save
   end
 
@@ -725,7 +1018,7 @@ class IssueTest < ActiveSupport::TestCase
   end
 
   def test_recipients_should_include_the_assigned_group_members
-    group_member = User.generate_with_protected!
+    group_member = User.generate!
     group = Group.generate!
     group.users << group_member
 
@@ -1057,11 +1350,12 @@ class IssueTest < ActiveSupport::TestCase
     assert IssueRelation.create!(:issue_from => Issue.find(2),
                                  :issue_to   => Issue.find(3),
                                  :relation_type => IssueRelation::TYPE_PRECEDES)
-    # Validation skipping
-    assert IssueRelation.new(:issue_from => Issue.find(3),
-                             :issue_to   => Issue.find(1),
-                             :relation_type => IssueRelation::TYPE_PRECEDES).save(false)
 
+    r = IssueRelation.create!(:issue_from => Issue.find(3),
+                             :issue_to   => Issue.find(7),
+                             :relation_type => IssueRelation::TYPE_PRECEDES)
+    IssueRelation.update_all("issue_to_id = 1", ["id = ?", r.id])
+    
     assert_equal [2, 3], Issue.find(1).all_dependent_issues.collect(&:id).sort
   end
 
@@ -1076,13 +1370,16 @@ class IssueTest < ActiveSupport::TestCase
     assert IssueRelation.create!(:issue_from => Issue.find(3),
                                  :issue_to   => Issue.find(8),
                                  :relation_type => IssueRelation::TYPE_RELATES)
-    # Validation skipping
-    assert IssueRelation.new(:issue_from => Issue.find(8),
-                             :issue_to   => Issue.find(2),
-                             :relation_type => IssueRelation::TYPE_RELATES).save(false)
-    assert IssueRelation.new(:issue_from => Issue.find(3),
-                             :issue_to   => Issue.find(1),
-                             :relation_type => IssueRelation::TYPE_RELATES).save(false)
+
+    r = IssueRelation.create!(:issue_from => Issue.find(8),
+                             :issue_to   => Issue.find(7),
+                             :relation_type => IssueRelation::TYPE_RELATES)
+    IssueRelation.update_all("issue_to_id = 2", ["id = ?", r.id])
+    
+    r = IssueRelation.create!(:issue_from => Issue.find(3),
+                             :issue_to   => Issue.find(7),
+                             :relation_type => IssueRelation::TYPE_RELATES)
+    IssueRelation.update_all("issue_to_id = 1", ["id = ?", r.id])
 
     assert_equal [2, 3, 8], Issue.find(1).all_dependent_issues.collect(&:id).sort
   end
@@ -1213,10 +1510,9 @@ class IssueTest < ActiveSupport::TestCase
     assert_equal 2, groups.inject(0) {|sum, group| sum + group['total'].to_i}
   end
 
-  def test_recently_updated_with_limit_scopes
+  def test_recently_updated_scope
     #should return the last updated issue
-    assert_equal 1, Issue.recently_updated.with_limit(1).length
-    assert_equal Issue.find(:first, :order => "updated_on DESC"), Issue.recently_updated.with_limit(1).first
+    assert_equal Issue.reorder("updated_on DESC").first, Issue.recently_updated.limit(1).first
   end
 
   def test_on_active_projects_scope
@@ -1236,8 +1532,8 @@ class IssueTest < ActiveSupport::TestCase
   context "Issue#recipients" do
     setup do
       @project = Project.find(1)
-      @author = User.generate_with_protected!
-      @assignee = User.generate_with_protected!
+      @author = User.generate!
+      @assignee = User.generate!
       @issue = Issue.generate_for_project!(@project, :assigned_to => @assignee, :author => @author)
     end
 
@@ -1283,5 +1579,14 @@ class IssueTest < ActiveSupport::TestCase
 
   def test_last_journal_id_without_journals_should_return_nil
     assert_nil Issue.find(3).last_journal_id
+  end
+
+  def test_journals_after_should_return_journals_with_greater_id
+    assert_equal [Journal.find(2)], Issue.find(1).journals_after('1')
+    assert_equal [], Issue.find(1).journals_after('2')
+  end
+
+  def test_journals_after_with_blank_arg_should_return_all_journals
+    assert_equal [Journal.find(1), Journal.find(2)], Issue.find(1).journals_after('')
   end
 end

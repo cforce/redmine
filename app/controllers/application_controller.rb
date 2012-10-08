@@ -1,5 +1,5 @@
 # Redmine - project management software
-# Copyright (C) 2006-2011  Jean-Philippe Lang
+# Copyright (C) 2006-2012  Jean-Philippe Lang
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -23,8 +23,11 @@ class Unauthorized < Exception; end
 class ApplicationController < ActionController::Base
   include Redmine::I18n
 
+  class_attribute :accept_api_auth_actions
+  class_attribute :accept_rss_auth_actions
+  class_attribute :model_object
+
   layout 'base'
-  exempt_from_layout 'builder', 'rsb'
 
   protect_from_forgery
   def handle_unverified_request
@@ -32,43 +35,15 @@ class ApplicationController < ActionController::Base
     cookies.delete(:autologin)
   end
 
-  # FIXME: Remove this when all of Rack and Rails have learned how to
-  # properly use encodings
-  before_filter :params_filter
-
-  def params_filter
-    if RUBY_VERSION >= '1.9' && defined?(Rails) && Rails::VERSION::MAJOR < 3
-      self.utf8nize!(params)
-    end
-  end
-
-  def utf8nize!(obj)
-    if obj.frozen?
-      obj
-    elsif obj.is_a? String
-      obj.respond_to?(:force_encoding) ? obj.force_encoding("UTF-8") : obj
-    elsif obj.is_a? Hash
-      obj.each {|k, v| obj[k] = self.utf8nize!(v)}
-    elsif obj.is_a? Array
-      obj.each {|v| self.utf8nize!(v)}
-    else
-      obj
-    end
-  end
-
   before_filter :session_expiration, :user_setup, :check_if_login_required, :set_localization
-  filter_parameter_logging :password
 
   rescue_from ActionController::InvalidAuthenticityToken, :with => :invalid_authenticity_token
   rescue_from ::Unauthorized, :with => :deny_access
+  rescue_from ::ActionView::MissingTemplate, :with => :missing_template
 
   include Redmine::Search::Controller
   include Redmine::MenuManager::MenuController
   helper Redmine::MenuManager::MenuHelper
-
-  Redmine::Scm::Base.all.each do |scm|
-    require_dependency "repository/#{scm.underscore}"
-  end
 
   def session_expiration
     if session[:user_id]
@@ -107,30 +82,36 @@ class ApplicationController < ActionController::Base
     Setting.check_cache
     # Find the current user
     User.current = find_current_user
+    logger.info("  Current user: " + (User.current.logged? ? "#{User.current.login} (id=#{User.current.id})" : "anonymous")) if logger
   end
 
   # Returns the current user or nil if no user is logged in
   # and starts a session if needed
   def find_current_user
-    if session[:user_id]
-      # existing session
-      (User.active.find(session[:user_id]) rescue nil)
-    elsif user = try_to_autologin
-      user
-    elsif params[:format] == 'atom' && params[:key] && request.get? && accept_rss_auth?
-      # RSS key authentication does not start a session
-      User.find_by_rss_key(params[:key])
-    elsif Setting.rest_api_enabled? && accept_api_auth?
+    user = nil
+    unless api_request?
+      if session[:user_id]
+        # existing session
+        user = (User.active.find(session[:user_id]) rescue nil)
+      elsif autologin_user = try_to_autologin
+        user = autologin_user
+      elsif params[:format] == 'atom' && params[:key] && request.get? && accept_rss_auth?
+        # RSS key authentication does not start a session
+        user = User.find_by_rss_key(params[:key])
+      end
+    end
+    if user.nil? && Setting.rest_api_enabled? && accept_api_auth?
       if (key = api_key_from_request)
         # Use API key
-        User.find_by_api_key(key)
+        user = User.find_by_api_key(key)
       else
         # HTTP Basic, either username/password or API key/random
         authenticate_with_http_basic do |username, password|
-          User.try_to_login(username, password) || User.find_by_api_key(username)
+          user = User.try_to_login(username, password) || User.find_by_api_key(username)
         end
       end
     end
+    user
   end
 
   def try_to_autologin
@@ -272,7 +253,7 @@ class ApplicationController < ActionController::Base
   end
 
   def find_model_object
-    model = self.class.read_inheritable_attribute('model_object')
+    model = self.class.model_object
     if model
       @object = model.find(params[:id])
       self.instance_variable_set('@' + controller_name.singularize, @object) if @object
@@ -282,7 +263,7 @@ class ApplicationController < ActionController::Base
   end
 
   def self.model_object(model)
-    write_inheritable_attribute('model_object', model)
+    self.model_object = model
   end
 
   # Filter for bulk issue operations
@@ -302,7 +283,7 @@ class ApplicationController < ActionController::Base
   # make sure that the user is a member of the project (or admin) if project is private
   # used as a before_filter for actions that do not require any particular permission on the project
   def check_project_privacy
-    if @project && @project.active?
+    if @project && !@project.archived?
       if @project.visible?
         true
       else
@@ -316,12 +297,16 @@ class ApplicationController < ActionController::Base
   end
 
   def back_url
-    params[:back_url] || request.env['HTTP_REFERER']
+    url = params[:back_url]
+    if url.nil? && referer = request.env['HTTP_REFERER']
+      url = CGI.unescape(referer.to_s)
+    end
+    url
   end
 
   def redirect_back_or_default(default)
-    back_url = CGI.unescape(params[:back_url].to_s)
-    if !back_url.blank?
+    back_url = params[:back_url].to_s
+    if back_url.present?
       begin
         uri = URI.parse(back_url)
         # do not redirect user to another host or to the login or register page
@@ -330,11 +315,25 @@ class ApplicationController < ActionController::Base
           return
         end
       rescue URI::InvalidURIError
+        logger.warn("Could not redirect to invalid URL #{back_url}")
         # redirect to default
       end
     end
     redirect_to default
     false
+  end
+
+  # Redirects to the request referer if present, redirects to args or call block otherwise.
+  def redirect_to_referer_or(*args, &block)
+    redirect_to :back
+  rescue ::ActionController::RedirectBackError
+    if args.any?
+      redirect_to *args
+    elsif block_given?
+      block.call
+    else
+      raise "#redirect_to_referer_or takes arguments or a block"
+    end
   end
 
   def render_403(options={})
@@ -360,13 +359,17 @@ class ApplicationController < ActionController::Base
       format.html {
         render :template => 'common/error', :layout => use_layout, :status => @status
       }
-      format.atom { head @status }
-      format.xml { head @status }
-      format.js { head @status }
-      format.json { head @status }
+      format.any { head @status }
     end
   end
-  
+
+  # Handler for ActionView::MissingTemplate exception
+  def missing_template
+    logger.warn "Missing template, responding with 404"
+    @project = nil
+    render_404
+  end
+
   # Filter for actions that provide an API response
   # but have no HTML representation for non admin users
   def require_admin_or_api_request
@@ -399,15 +402,15 @@ class ApplicationController < ActionController::Base
     @items.sort! {|x,y| y.event_datetime <=> x.event_datetime }
     @items = @items.slice(0, Setting.feeds_limit.to_i)
     @title = options[:title] || Setting.app_title
-    render :template => "common/feed.atom", :layout => false,
+    render :template => "common/feed", :formats => [:atom], :layout => false,
            :content_type => 'application/atom+xml'
   end
 
   def self.accept_rss_auth(*actions)
     if actions.any?
-      write_inheritable_attribute('accept_rss_auth_actions', actions)
+      self.accept_rss_auth_actions = actions
     else
-      read_inheritable_attribute('accept_rss_auth_actions') || []
+      self.accept_rss_auth_actions || []
     end
   end
 
@@ -417,9 +420,9 @@ class ApplicationController < ActionController::Base
 
   def self.accept_api_auth(*actions)
     if actions.any?
-      write_inheritable_attribute('accept_api_auth_actions', actions)
+      self.accept_api_auth_actions = actions
     else
-      read_inheritable_attribute('accept_api_auth_actions') || []
+      self.accept_api_auth_actions || []
     end
   end
 
@@ -533,6 +536,12 @@ class ApplicationController < ActionController::Base
     render_error "An error occurred while executing the query and has been logged. Please report this error to your Redmine administrator."
   end
 
+  # Renders a 200 response for successfull updates or deletions via the API
+  def render_api_ok
+    # head :ok would return a response body with one space
+    render :text => '', :status => :ok, :layout => nil
+  end
+
   # Renders API response on validation failure
   def render_validation_errors(objects)
     if objects.is_a?(Array)
@@ -540,26 +549,12 @@ class ApplicationController < ActionController::Base
     else
       @error_messages = objects.errors.full_messages
     end
-    render :template => 'common/error_messages.api', :status => :unprocessable_entity, :layout => false
+    render :template => 'common/error_messages.api', :status => :unprocessable_entity, :layout => nil
   end
 
-  # Overrides #default_template so that the api template
-  # is used automatically if it exists
-  def default_template(action_name = self.action_name)
-    if api_request?
-      begin
-        return self.view_paths.find_template(default_template_name(action_name), 'api')
-      rescue ::ActionView::MissingTemplate
-        # the api template was not found
-        # fallback to the default behaviour
-      end
-    end
-    super
-  end
-
-  # Overrides #pick_layout so that #render with no arguments
+  # Overrides #_include_layout? so that #render with no arguments
   # doesn't use the layout for api requests
-  def pick_layout(*args)
-    api_request? ? nil : super
+  def _include_layout?(*args)
+    api_request? ? false : super
   end
 end

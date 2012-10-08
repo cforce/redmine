@@ -1,5 +1,5 @@
 # Redmine - project management software
-# Copyright (C) 2006-2011  Jean-Philippe Lang
+# Copyright (C) 2006-2012  Jean-Philippe Lang
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -34,9 +34,9 @@ class Version < ActiveRecord::Base
   validates_inclusion_of :status, :in => VERSION_STATUSES
   validates_inclusion_of :sharing, :in => VERSION_SHARINGS
 
-  named_scope :named, lambda {|arg| { :conditions => ["LOWER(#{table_name}.name) = LOWER(?)", arg.to_s.strip]}}
-  named_scope :open, :conditions => {:status => 'open'}
-  named_scope :visible, lambda {|*args| { :include => :project,
+  scope :named, lambda {|arg| { :conditions => ["LOWER(#{table_name}.name) = LOWER(?)", arg.to_s.strip]}}
+  scope :open, :conditions => {:status => 'open'}
+  scope :visible, lambda {|*args| { :include => :project,
                                           :conditions => Project.allowed_to_condition(args.first || User.current, :view_issues) } }
 
   safe_attributes 'name', 
@@ -91,7 +91,7 @@ class Version < ActiveRecord::Base
 
   # Returns true if the version is completed: due date reached and no open issues
   def completed?
-    effective_date && (effective_date <= Date.today) && (open_issues_count == 0)
+    effective_date && (effective_date < Date.today) && (open_issues_count == 0)
   end
 
   def behind_schedule?
@@ -162,13 +162,13 @@ class Version < ActiveRecord::Base
     "#{project} - #{name}"
   end
 
-  # Versions are sorted by effective_date and "Project Name - Version name"
-  # Those with no effective_date are at the end, sorted by "Project Name - Version name"
+  # Versions are sorted by effective_date and name
+  # Those with no effective_date are at the end, sorted by name
   def <=>(version)
     if self.effective_date
       if version.effective_date
         if self.effective_date == version.effective_date
-          "#{self.project.name} - #{self.name}" <=> "#{version.project.name} - #{version.name}"
+          name == version.name ? id <=> version.id : name <=> version.name
         else
           self.effective_date <=> version.effective_date
         end
@@ -179,10 +179,17 @@ class Version < ActiveRecord::Base
       if version.effective_date
         1
       else
-        "#{self.project.name} - #{self.name}" <=> "#{version.project.name} - #{version.name}"
+        name == version.name ? id <=> version.id : name <=> version.name
       end
     end
   end
+
+  def self.fields_for_order_statement(table=nil)
+    table ||= table_name
+    ["(CASE WHEN #{table}.effective_date IS NULL THEN 1 ELSE 0 END)", "#{table}.effective_date", "#{table}.name", "#{table}.id"]
+  end
+
+  scope :sorted, order(fields_for_order_statement)
 
   # Returns the sharings that +user+ can set the version to
   def allowed_sharings(user = User.current)

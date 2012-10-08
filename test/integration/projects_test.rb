@@ -1,5 +1,5 @@
 # Redmine - project management software
-# Copyright (C) 2006-2011  Jean-Philippe Lang
+# Copyright (C) 2006-2012  Jean-Philippe Lang
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -45,7 +45,7 @@ class ProjectsTest < ActionController::IntegrationTest
   def test_modules_should_not_allow_get
     assert_no_difference 'EnabledModule.count' do
       get '/projects/1/modules', {:enabled_module_names => ['']}, credentials('jsmith')
-      assert_response :method_not_allowed
+      assert_response 404
     end
   end
 end

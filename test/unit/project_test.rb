@@ -1,5 +1,5 @@
 # Redmine - project management software
-# Copyright (C) 2006-2011  Jean-Philippe Lang
+# Copyright (C) 2006-2012  Jean-Philippe Lang
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -34,8 +34,9 @@ class ProjectTest < ActiveSupport::TestCase
            :versions,
            :wikis, :wiki_pages, :wiki_contents, :wiki_content_versions,
            :groups_users,
-           :boards,
-           :repositories
+           :boards, :messages,
+           :repositories,
+           :documents
 
   def setup
     @ecookbook = Project.find(1)
@@ -106,6 +107,20 @@ class ProjectTest < ActiveSupport::TestCase
     end
   end
 
+  def test_identifier_should_not_be_frozen_for_a_new_project
+    assert_equal false, Project.new.identifier_frozen?
+  end
+
+  def test_identifier_should_not_be_frozen_for_a_saved_project_with_blank_identifier
+    Project.update_all(["identifier = ''"], "id = 1")
+
+    assert_equal false, Project.find(1).identifier_frozen?
+  end
+
+  def test_identifier_should_be_frozen_for_a_saved_project_with_valid_identifier
+    assert_equal true, Project.find(1).identifier_frozen?
+  end
+
   def test_members_should_be_active_users
     Project.all.each do |project|
       assert_nil project.members.detect {|m| !(m.user.is_a?(User) && m.user.active?) }
@@ -116,6 +131,10 @@ class ProjectTest < ActiveSupport::TestCase
     Project.all.each do |project|
       assert_nil project.users.detect {|u| !(u.is_a?(User) && u.active?) }
     end
+  end
+
+  def test_open_scope_on_issues_association
+    assert_kind_of Issue, Project.find(1).issues.open.first
   end
 
   def test_archive
@@ -199,7 +218,7 @@ class ProjectTest < ActiveSupport::TestCase
     assert_equal 0, Issue.count
     assert_equal 0, Journal.count
     assert_equal 0, JournalDetail.count
-    assert_equal 0, Attachment.count
+    assert_equal 0, Attachment.count, "Attachments were not deleted: #{Attachment.all.inspect}"
     assert_equal 0, EnabledModule.count
     assert_equal 0, IssueCategory.count
     assert_equal 0, IssueRelation.count
@@ -754,7 +773,7 @@ class ProjectTest < ActiveSupport::TestCase
     project = Project.find(1)
     system_activity = TimeEntryActivity.find_by_name('Design')
     assert system_activity.active?
-    overridden_activity = TimeEntryActivity.generate!(:project => project, :parent => system_activity, :active => false)
+    overridden_activity = TimeEntryActivity.create!(:name => "Project", :project => project, :parent => system_activity, :active => false)
     assert overridden_activity.save!
 
     assert !project.activities.include?(overridden_activity), "Inactive Project specific Activity not found"
@@ -805,6 +824,27 @@ class ProjectTest < ActiveSupport::TestCase
       assert_equal "Closed", copied_issue.status.name
     end
 
+    should "copy issues assigned to a locked version" do
+      User.current = User.find(1)
+      assigned_version = Version.generate!(:name => "Assigned Issues")
+      @source_project.versions << assigned_version
+      Issue.generate_for_project!(@source_project,
+                                  :fixed_version_id => assigned_version.id,
+                                  :subject => "copy issues assigned to a locked version",
+                                  :tracker_id => 1,
+                                  :project_id => @source_project.id)
+      assigned_version.update_attribute :status, 'locked'
+
+      assert @project.copy(@source_project)
+      @project.reload
+      copied_issue = @project.issues.first(:conditions => {:subject => "copy issues assigned to a locked version"})
+
+      assert copied_issue
+      assert copied_issue.fixed_version
+      assert_equal "Assigned Issues", copied_issue.fixed_version.name # Same name
+      assert_equal 'locked', copied_issue.fixed_version.status
+    end
+
     should "change the new issues to use the copied version" do
       User.current = User.find(1)
       assigned_version = Version.generate!(:name => "Assigned Issues", :status => 'open')
@@ -826,6 +866,22 @@ class ProjectTest < ActiveSupport::TestCase
       assert_not_equal assigned_version.id, copied_issue.fixed_version.id # Different record
     end
 
+    should "keep target shared versions from other project" do
+      assigned_version = Version.generate!(:name => "Assigned Issues", :status => 'open', :project_id => 1, :sharing => 'system')
+      issue = Issue.generate_for_project!(@source_project,
+                                  :fixed_version => assigned_version,
+                                  :subject => "keep target shared versions",
+                                  :tracker_id => 1,
+                                  :project_id => @source_project.id)
+
+      assert @project.copy(@source_project)
+      @project.reload
+      copied_issue = @project.issues.first(:conditions => {:subject => "keep target shared versions"})
+
+      assert copied_issue
+      assert_equal assigned_version, copied_issue.fixed_version
+    end
+
     should "copy issue relations" do
       Setting.cross_project_issue_relations = '1'
 
@@ -834,10 +890,10 @@ class ProjectTest < ActiveSupport::TestCase
                                      :tracker_id => 1,
                                      :assigned_to_id => 2,
                                      :project_id => @source_project.id)
-      source_relation = IssueRelation.generate!(:issue_from => Issue.find(4),
+      source_relation = IssueRelation.create!(:issue_from => Issue.find(4),
                                                 :issue_to => second_issue,
                                                 :relation_type => "relates")
-      source_relation_cross_project = IssueRelation.generate!(:issue_from => Issue.find(1),
+      source_relation_cross_project = IssueRelation.create!(:issue_from => Issue.find(1),
                                                               :issue_to => second_issue,
                                                               :relation_type => "duplicates")
 
@@ -1000,7 +1056,23 @@ class ProjectTest < ActiveSupport::TestCase
       assert @project.issue_categories.any?
       assert @project.issues.empty?
     end
+  end
 
+  def test_copy_should_copy_subtasks
+    source = Project.generate!(:tracker_ids => [1])
+    issue = Issue.generate_with_descendants!(source, :subject => 'Parent')
+    project = Project.new(:name => 'Copy', :identifier => 'copy', :tracker_ids => [1])
+
+    assert_difference 'Project.count' do
+      assert_difference 'Issue.count', 1+issue.descendants.count do
+        assert project.copy(source.reload)
+      end
+    end
+    copy = Issue.where(:parent_id => nil).order("id DESC").first
+    assert_equal project, copy.project
+    assert_equal issue.descendants.count, copy.descendants.count
+    child_copy = copy.children.detect {|c| c.subject == 'Child1'}
+    assert child_copy.descendants.any?
   end
 
   context "#start_date" do
@@ -1116,22 +1188,22 @@ class ProjectTest < ActiveSupport::TestCase
       @role = Role.generate!
 
       @user_with_membership_notification = User.generate!(:mail_notification => 'selected')
-      Member.generate!(:project => @project, :roles => [@role], :principal => @user_with_membership_notification, :mail_notification => true)
+      Member.create!(:project => @project, :roles => [@role], :principal => @user_with_membership_notification, :mail_notification => true)
 
       @all_events_user = User.generate!(:mail_notification => 'all')
-      Member.generate!(:project => @project, :roles => [@role], :principal => @all_events_user)
+      Member.create!(:project => @project, :roles => [@role], :principal => @all_events_user)
 
       @no_events_user = User.generate!(:mail_notification => 'none')
-      Member.generate!(:project => @project, :roles => [@role], :principal => @no_events_user)
+      Member.create!(:project => @project, :roles => [@role], :principal => @no_events_user)
 
       @only_my_events_user = User.generate!(:mail_notification => 'only_my_events')
-      Member.generate!(:project => @project, :roles => [@role], :principal => @only_my_events_user)
+      Member.create!(:project => @project, :roles => [@role], :principal => @only_my_events_user)
 
       @only_assigned_user = User.generate!(:mail_notification => 'only_assigned')
-      Member.generate!(:project => @project, :roles => [@role], :principal => @only_assigned_user)
+      Member.create!(:project => @project, :roles => [@role], :principal => @only_assigned_user)
 
       @only_owned_user = User.generate!(:mail_notification => 'only_owner')
-      Member.generate!(:project => @project, :roles => [@role], :principal => @only_owned_user)
+      Member.create!(:project => @project, :roles => [@role], :principal => @only_owned_user)
     end
 
     should "include members with a mail notification" do

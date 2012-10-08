@@ -1,7 +1,7 @@
 # encoding: utf-8
 #
 # Redmine - project management software
-# Copyright (C) 2006-2011  Jean-Philippe Lang
+# Copyright (C) 2006-2012  Jean-Philippe Lang
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -90,6 +90,48 @@ module IssuesHelper
     end
     s << '</table></form>'
     s.html_safe
+  end
+
+  class IssueFieldsRows
+    include ActionView::Helpers::TagHelper
+
+    def initialize
+      @left = []
+      @right = []
+    end
+
+    def left(*args)
+      args.any? ? @left << cells(*args) : @left
+    end
+
+    def right(*args)
+      args.any? ? @right << cells(*args) : @right
+    end
+
+    def size
+      @left.size > @right.size ? @left.size : @right.size
+    end
+
+    def to_html
+      html = ''.html_safe
+      blank = content_tag('th', '') + content_tag('td', '')
+      size.times do |i|
+        left = @left[i] || blank
+        right = @right[i] || blank
+        html << content_tag('tr', left + right)
+      end
+      html
+    end
+
+    def cells(label, text, options={})
+      content_tag('th', "#{label}:", options) + content_tag('td', text, options)
+    end
+  end
+
+  def issue_fields_rows
+    r = IssueFieldsRows.new
+    yield r
+    r.to_html
   end
 
   def render_custom_fields_rows(issue)
@@ -248,7 +290,7 @@ module IssuesHelper
     unless no_html
       label = content_tag('strong', label)
       old_value = content_tag("i", h(old_value)) if detail.old_value
-      old_value = content_tag("strike", old_value) if detail.old_value and detail.value.blank?
+      old_value = content_tag("del", old_value) if detail.old_value and detail.value.blank?
       if detail.property == 'attachment' && !value.blank? && atta = Attachment.find_by_id(detail.prop_key)
         # Link to the attachment if it has not been removed
         value = link_to_attachment(atta, :download => true, :only_path => options[:only_path])

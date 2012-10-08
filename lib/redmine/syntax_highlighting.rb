@@ -1,5 +1,5 @@
 # Redmine - project management software
-# Copyright (C) 2006-2011  Jean-Philippe Lang
+# Copyright (C) 2006-2012  Jean-Philippe Lang
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -46,7 +46,7 @@ module Redmine
         # Highlights +text+ using +language+ syntax
         # Should not return outer pre tag
         def highlight_by_language(text, language)
-          ::CodeRay.scan(text, language).html(:line_numbers => :inline, :line_number_anchors => false, :wrap => :span)
+          ::CodeRay.scan(text, language).html(:wrap => :span)
         end
       end
     end

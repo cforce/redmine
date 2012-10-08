@@ -1,5 +1,5 @@
 # Redmine - project management software
-# Copyright (C) 2006-2011  Jean-Philippe Lang
+# Copyright (C) 2006-2012  Jean-Philippe Lang
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -22,7 +22,8 @@ require 'my_controller'
 class MyController; def rescue_action(e) raise e end; end
 
 class MyControllerTest < ActionController::TestCase
-  fixtures :users, :user_preferences, :roles, :projects, :issues, :issue_statuses, :trackers, :enumerations, :custom_fields
+  fixtures :users, :user_preferences, :roles, :projects, :members, :member_roles,
+  :issues, :issue_statuses, :trackers, :enumerations, :custom_fields, :auth_sources
 
   def setup
     @controller = MyController.new
@@ -41,6 +42,20 @@ class MyControllerTest < ActionController::TestCase
     get :page
     assert_response :success
     assert_template 'page'
+  end
+
+  def test_page_with_timelog_block
+    preferences = User.find(2).pref
+    preferences[:my_page_layout] = {'top' => ['timelog']}
+    preferences.save!
+    TimeEntry.create!(:user => User.find(2), :spent_on => Date.yesterday, :issue_id => 1, :hours => 2.5, :activity_id => 10)
+
+    get :page
+    assert_response :success
+    assert_select 'tr.time-entry' do
+      assert_select 'td.subject a[href=/issues/1]'
+      assert_select 'td.hours', :text => '2.50'
+    end
   end
 
   def test_my_account_should_show_editable_custom_fields
@@ -134,7 +149,7 @@ class MyControllerTest < ActionController::TestCase
                     :new_password_confirmation => 'hello2'
     assert_response :success
     assert_template 'password'
-    assert_error_tag :content => /Password doesn't match confirmation/
+    assert_error_tag :content => /Password doesn&#x27;t match confirmation/
 
     # wrong password
     post :password, :password => 'wrongpassword',
@@ -152,6 +167,14 @@ class MyControllerTest < ActionController::TestCase
     assert User.try_to_login('jsmith', 'hello')
   end
 
+  def test_change_password_should_redirect_if_user_cannot_change_its_password
+    User.find(2).update_attribute(:auth_source_id, 1)
+
+    get :password
+    assert_not_nil flash[:error]
+    assert_redirected_to '/my/account'
+  end
+
   def test_page_layout
     get :page_layout
     assert_response :success
@@ -159,19 +182,19 @@ class MyControllerTest < ActionController::TestCase
   end
 
   def test_add_block
-    xhr :post, :add_block, :block => 'issuesreportedbyme'
-    assert_response :success
+    post :add_block, :block => 'issuesreportedbyme'
+    assert_redirected_to '/my/page_layout'
     assert User.find(2).pref[:my_page_layout]['top'].include?('issuesreportedbyme')
   end
 
   def test_remove_block
-    xhr :post, :remove_block, :block => 'issuesassignedtome'
-    assert_response :success
+    post :remove_block, :block => 'issuesassignedtome'
+    assert_redirected_to '/my/page_layout'
     assert !User.find(2).pref[:my_page_layout].values.flatten.include?('issuesassignedtome')
   end
 
   def test_order_blocks
-    xhr :post, :order_blocks, :group => 'left', 'list-left' => ['documents', 'calendar', 'latestnews']
+    xhr :post, :order_blocks, :group => 'left', 'blocks' => ['documents', 'calendar', 'latestnews']
     assert_response :success
     assert_equal ['documents', 'calendar', 'latestnews'], User.find(2).pref[:my_page_layout]['left']
   end
