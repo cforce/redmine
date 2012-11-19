@@ -1,5 +1,5 @@
 # Redmine - project management software
-# Copyright (C) 2006-2011  Jean-Philippe Lang
+# Copyright (C) 2006-2012  Jean-Philippe Lang
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -18,7 +18,7 @@
 require File.expand_path('../../../test_helper', __FILE__)
 require 'pp'
 class ApiTest::UsersTest < ActionController::IntegrationTest
-  fixtures :users
+  fixtures :users, :members, :member_roles, :roles, :projects
 
   def setup
     Setting.rest_api_enabled = '1'
@@ -238,6 +238,7 @@ class ApiTest::UsersTest < ActionController::IntegrationTest
           assert !user.admin?
 
           assert_response :ok
+          assert_equal '', @response.body
         end
       end
 
@@ -263,6 +264,7 @@ class ApiTest::UsersTest < ActionController::IntegrationTest
           assert !user.admin?
 
           assert_response :ok
+          assert_equal '', @response.body
         end
       end
     end
@@ -322,6 +324,7 @@ class ApiTest::UsersTest < ActionController::IntegrationTest
         end
 
         assert_response :ok
+        assert_equal '', @response.body
       end
     end
 
@@ -337,6 +340,7 @@ class ApiTest::UsersTest < ActionController::IntegrationTest
         end
 
         assert_response :ok
+        assert_equal '', @response.body
       end
     end
   end

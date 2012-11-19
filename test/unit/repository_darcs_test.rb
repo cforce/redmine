@@ -1,5 +1,5 @@
 # Redmine - project management software
-# Copyright (C) 2006-2011  Jean-Philippe Lang
+# Copyright (C) 2006-2012  Jean-Philippe Lang
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -68,7 +68,7 @@ class RepositoryDarcsTest < ActiveSupport::TestCase
       @project.reload
 
       assert_equal NUM_REV, @repository.changesets.count
-      assert_equal 13, @repository.changes.count
+      assert_equal 13, @repository.filechanges.count
       assert_equal "Initial commit.", @repository.changesets.find_by_revision('1').comments
     end
 
@@ -86,6 +86,11 @@ class RepositoryDarcsTest < ActiveSupport::TestCase
       @repository.fetch_changesets
       @project.reload
       assert_equal NUM_REV, @repository.changesets.count
+    end
+
+    def test_entries
+      entries = @repository.entries
+      assert_kind_of Redmine::Scm::Adapters::Entries, entries
     end
 
     def test_entries_invalid_revision

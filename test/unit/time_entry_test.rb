@@ -1,5 +1,5 @@
 # Redmine - project management software
-# Copyright (C) 2006-2011  Jean-Philippe Lang
+# Copyright (C) 2006-2012  Jean-Philippe Lang
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -45,6 +45,7 @@ class TimeEntryTest < ActiveSupport::TestCase
                    "3 h 15 m" => 3.25,
                    "3 hours"  => 3.0,
                    "12min"    => 0.2,
+                   "12 Min"    => 0.2,
                   }
 
     assertions.each do |k, v|

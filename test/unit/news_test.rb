@@ -1,5 +1,5 @@
 # Redmine - project management software
-# Copyright (C) 2006-2011  Jean-Philippe Lang
+# Copyright (C) 2006-2012  Jean-Philippe Lang
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -29,10 +29,11 @@ class NewsTest < ActiveSupport::TestCase
 
   def test_create_should_send_email_notification
     ActionMailer::Base.deliveries.clear
-    Setting.notified_events << 'news_added'
     news = Project.find(1).news.new(valid_news)
 
-    assert news.save
+    with_settings :notified_events => %w(news_added) do
+      assert news.save
+    end
     assert_equal 1, ActionMailer::Base.deliveries.size
   end
 

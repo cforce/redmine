@@ -1,5 +1,5 @@
 # Redmine - project management software
-# Copyright (C) 2006-2011  Jean-Philippe Lang
+# Copyright (C) 2006-2012  Jean-Philippe Lang
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -19,10 +19,14 @@ class ScmFetchError < Exception; end
 
 class Repository < ActiveRecord::Base
   include Redmine::Ciphering
+  include Redmine::SafeAttributes
+  
+  # Maximum length for repository identifiers
+  IDENTIFIER_MAX_LENGTH = 255
 
   belongs_to :project
   has_many :changesets, :order => "#{Changeset.table_name}.committed_on DESC, #{Changeset.table_name}.id DESC"
-  has_many :changes, :through => :changesets
+  has_many :filechanges, :class_name => 'Change', :through => :changesets
 
   serialize :extra_info
 
@@ -33,14 +37,24 @@ class Repository < ActiveRecord::Base
   before_destroy :clear_changesets
 
   validates_length_of :password, :maximum => 255, :allow_nil => true
-  validates_length_of :identifier, :maximum => 255, :allow_blank => true
+  validates_length_of :identifier, :maximum => IDENTIFIER_MAX_LENGTH, :allow_blank => true
   validates_presence_of :identifier, :unless => Proc.new { |r| r.is_default? || r.set_as_default? }
   validates_uniqueness_of :identifier, :scope => :project_id, :allow_blank => true
   validates_exclusion_of :identifier, :in => %w(show entry raw changes annotate diff show stats graph)
-  # donwcase letters, digits, dashes but not digits only
-  validates_format_of :identifier, :with => /^(?!\d+$)[a-z0-9\-]*$/, :allow_blank => true
+  # donwcase letters, digits, dashes, underscores but not digits only
+  validates_format_of :identifier, :with => /^(?!\d+$)[a-z0-9\-_]*$/, :allow_blank => true
   # Checks if the SCM is enabled when creating a repository
   validate :repo_create_validation, :on => :create
+
+  safe_attributes 'identifier',
+    'login',
+    'password',
+    'path_encoding',
+    'log_encoding',
+    'is_default'
+
+  safe_attributes 'url',
+    :if => lambda {|repository, user| repository.new_record?}
 
   def repo_create_validation
     unless Setting.enabled_scm.include?(self.class.name.demodulize)
@@ -54,28 +68,6 @@ class Repository < ActiveRecord::Base
       attr_name = "commit_logs_encoding"
     end
     super(attr_name, *args)
-  end
-
-  alias :attributes_without_extra_info= :attributes=
-  def attributes=(new_attributes, guard_protected_attributes = true)
-    return if new_attributes.nil?
-    attributes = new_attributes.dup
-    attributes.stringify_keys!
-
-    p       = {}
-    p_extra = {}
-    attributes.each do |k, v|
-      if k =~ /^extra_/
-        p_extra[k] = v
-      else
-        p[k] = v
-      end
-    end
-
-    send :attributes_without_extra_info=, p, guard_protected_attributes
-    if p_extra.keys.any?
-      merge_extra_info(p_extra)
-    end
   end
 
   # Removes leading and trailing whitespace
@@ -125,6 +117,14 @@ class Repository < ActiveRecord::Base
     end
   end
 
+  def identifier=(identifier)
+    super unless identifier_frozen?
+  end
+
+  def identifier_frozen?
+    errors[:identifier].blank? && !(new_record? || identifier.blank?)
+  end
+
   def identifier_param
     if is_default?
       nil
@@ -141,7 +141,7 @@ class Repository < ActiveRecord::Base
     elsif repository.is_default?
       1
     else
-      identifier <=> repository.identifier
+      identifier.to_s <=> repository.identifier.to_s
     end
   end
 
@@ -189,7 +189,9 @@ class Repository < ActiveRecord::Base
   end
 
   def entries(path=nil, identifier=nil)
-    scm.entries(path, identifier)
+    entries = scm.entries(path, identifier)
+    load_entries_changesets(entries)
+    entries
   end
 
   def branches
@@ -250,7 +252,7 @@ class Repository < ActiveRecord::Base
          :order => "#{Changeset.table_name}.committed_on DESC, #{Changeset.table_name}.id DESC",
          :limit => limit)
     else
-      changes.find(
+      filechanges.find(
          :all,
          :include => {:changeset => :user},
          :conditions => ["path = ?", path.with_leading_slash],
@@ -399,6 +401,16 @@ class Repository < ActiveRecord::Base
     end
     if is_default? && is_default_changed?
       Repository.update_all(["is_default = ?", false], ["project_id = ?", project_id])
+    end
+  end
+
+  def load_entries_changesets(entries)
+    if entries
+      entries.each do |entry|
+        if entry.lastrev && entry.lastrev.identifier
+          entry.changeset = find_changeset_by_name(entry.lastrev.identifier)
+        end
+      end
     end
   end
 

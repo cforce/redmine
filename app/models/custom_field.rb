@@ -30,9 +30,32 @@ class CustomField < ActiveRecord::Base
   validate :validate_custom_field
   before_validation :set_searchable
 
-  def initialize(attributes=nil, *args)
-    super
-    self.possible_values ||= []
+  CUSTOM_FIELDS_TABS = [
+    {:name => 'IssueCustomField', :partial => 'custom_fields/index',
+     :label => :label_issue_plural},
+    {:name => 'TimeEntryCustomField', :partial => 'custom_fields/index',
+     :label => :label_spent_time},
+    {:name => 'ProjectCustomField', :partial => 'custom_fields/index',
+     :label => :label_project_plural},
+    {:name => 'VersionCustomField', :partial => 'custom_fields/index',
+     :label => :label_version_plural},
+    {:name => 'UserCustomField', :partial => 'custom_fields/index',
+     :label => :label_user_plural},
+    {:name => 'GroupCustomField', :partial => 'custom_fields/index',
+     :label => :label_group_plural},
+    {:name => 'TimeEntryActivityCustomField', :partial => 'custom_fields/index',
+     :label => TimeEntryActivity::OptionName},
+    {:name => 'IssuePriorityCustomField', :partial => 'custom_fields/index',
+     :label => IssuePriority::OptionName},
+    {:name => 'DocumentCategoryCustomField', :partial => 'custom_fields/index',
+     :label => DocumentCategory::OptionName}
+  ]
+
+  CUSTOM_FIELDS_NAMES = CUSTOM_FIELDS_TABS.collect{|v| v[:name]}
+
+  def field_format=(arg)
+    # cannot change format of a saved custom field
+    super if new_record?
   end
 
   def set_searchable
@@ -80,7 +103,7 @@ class CustomField < ActiveRecord::Base
     when 'bool'
       [[l(:general_text_Yes), '1'], [l(:general_text_No), '0']]
     else
-      read_attribute(:possible_values) || []
+      possible_values || []
     end
   end
 
@@ -91,14 +114,20 @@ class CustomField < ActiveRecord::Base
     when 'bool'
       ['1', '0']
     else
-      read_attribute :possible_values
+      values = super()
+      if values.is_a?(Array)
+        values.each do |value|
+          value.force_encoding('UTF-8') if value.respond_to?(:force_encoding)
+        end
+      end
+      values || []
     end
   end
 
   # Makes possible_values accept a multiline string
   def possible_values=(arg)
     if arg.is_a?(Array)
-      write_attribute(:possible_values, arg.compact.collect(&:strip).select {|v| !v.blank?})
+      super(arg.compact.collect(&:strip).select {|v| !v.blank?})
     else
       self.possible_values = arg.to_s.split(/[\n\r]+/)
     end
@@ -125,16 +154,26 @@ class CustomField < ActiveRecord::Base
     casted
   end
 
+  def value_from_keyword(keyword, customized)
+    possible_values_options = possible_values_options(customized)
+    if possible_values_options.present?
+      keyword = keyword.to_s.downcase
+      possible_values_options.detect {|text, id| text.downcase == keyword}.try(:last)
+    else
+      keyword
+    end
+  end
+ 
   # Returns a ORDER BY clause that can used to sort customized
   # objects by their value of the custom field.
-  # Returns false, if the custom field can not be used for sorting.
+  # Returns nil if the custom field can not be used for sorting.
   def order_statement
     return nil if multiple?
     case field_format
       when 'string', 'text', 'list', 'date', 'bool'
         # COALESCE is here to make sure that blank and NULL values are sorted equally
         "COALESCE((SELECT cv_sort.value FROM #{CustomValue.table_name} cv_sort" +
-          " WHERE cv_sort.customized_type='#{self.class.customized_class.name}'" +
+          " WHERE cv_sort.customized_type='#{self.class.customized_class.base_class.name}'" +
           " AND cv_sort.customized_id=#{self.class.customized_class.table_name}.id" +
           " AND cv_sort.custom_field_id=#{id} LIMIT 1), '')"
       when 'int', 'float'
@@ -142,16 +181,72 @@ class CustomField < ActiveRecord::Base
         # Postgresql will raise an error if a value can not be casted!
         # CustomValue validations should ensure that it doesn't occur
         "(SELECT CAST(cv_sort.value AS decimal(60,3)) FROM #{CustomValue.table_name} cv_sort" +
-          " WHERE cv_sort.customized_type='#{self.class.customized_class.name}'" +
+          " WHERE cv_sort.customized_type='#{self.class.customized_class.base_class.name}'" +
           " AND cv_sort.customized_id=#{self.class.customized_class.table_name}.id" +
           " AND cv_sort.custom_field_id=#{id} AND cv_sort.value <> '' AND cv_sort.value IS NOT NULL LIMIT 1)"
+      when 'user', 'version'
+        value_class.fields_for_order_statement(value_join_alias)
       else
         nil
     end
   end
 
+  # Returns a GROUP BY clause that can used to group by custom value
+  # Returns nil if the custom field can not be used for grouping.
+  def group_statement 
+    return nil if multiple?
+    case field_format
+      when 'list', 'date', 'bool', 'int'
+        order_statement
+      when 'user', 'version'
+        "COALESCE((SELECT cv_sort.value FROM #{CustomValue.table_name} cv_sort" +
+          " WHERE cv_sort.customized_type='#{self.class.customized_class.base_class.name}'" +
+          " AND cv_sort.customized_id=#{self.class.customized_class.table_name}.id" +
+          " AND cv_sort.custom_field_id=#{id} LIMIT 1), '')"
+      else
+        nil
+    end
+  end
+
+  def join_for_order_statement
+    case field_format
+      when 'user', 'version'
+        "LEFT OUTER JOIN #{CustomValue.table_name} #{join_alias}" +
+          " ON #{join_alias}.customized_type = '#{self.class.customized_class.base_class.name}'" +
+          " AND #{join_alias}.customized_id = #{self.class.customized_class.table_name}.id" +
+          " AND #{join_alias}.custom_field_id = #{id}" +
+          " AND #{join_alias}.value <> ''" +
+          " AND #{join_alias}.id = (SELECT max(#{join_alias}_2.id) FROM #{CustomValue.table_name} #{join_alias}_2" +
+            " WHERE #{join_alias}_2.customized_type = #{join_alias}.customized_type" +
+            " AND #{join_alias}_2.customized_id = #{join_alias}.customized_id" +
+            " AND #{join_alias}_2.custom_field_id = #{join_alias}.custom_field_id)" +
+          " LEFT OUTER JOIN #{value_class.table_name} #{value_join_alias}" +
+          " ON CAST(#{join_alias}.value as decimal(60,0)) = #{value_join_alias}.id"
+      else
+        nil
+    end
+  end
+
+  def join_alias
+    "cf_#{id}"
+  end
+
+  def value_join_alias
+    join_alias + "_" + field_format
+  end
+
   def <=>(field)
     position <=> field.position
+  end
+
+  # Returns the class that values represent
+  def value_class
+    case field_format
+      when 'user', 'version'
+        field_format.classify.constantize
+      else
+        nil
+    end
   end
 
   def self.customized_class
@@ -192,6 +287,10 @@ class CustomField < ActiveRecord::Base
   # Returns true if value is a valid value for the custom field
   def valid_field_value?(value)
     validate_field_value(value).empty?
+  end
+
+  def format_in?(*args)
+    args.include?(field_format)
   end
 
   protected

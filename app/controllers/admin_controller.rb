@@ -1,5 +1,5 @@
 # Redmine - project management software
-# Copyright (C) 2006-2011  Jean-Philippe Lang
+# Copyright (C) 2006-2012  Jean-Philippe Lang
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -63,7 +63,7 @@ class AdminController < ApplicationController
     # Force ActionMailer to raise delivery errors so we can catch it
     ActionMailer::Base.raise_delivery_errors = true
     begin
-      @test = Mailer.deliver_test_email(User.current)
+      @test = Mailer.test_email(User.current).deliver
       flash[:notice] = l(:notice_email_sent, User.current.mail)
     rescue Exception => e
       flash[:error] = l(:notice_email_error, e.message)
@@ -75,9 +75,7 @@ class AdminController < ApplicationController
   def info
     @db_adapter_name = ActiveRecord::Base.connection.adapter_name
     @checklist = [
-      [:text_default_administrator_account_changed,
-          User.find(:first,
-                    :conditions => ["login=? and hashed_password=?", 'admin', User.hash_password('admin')]).nil?],
+      [:text_default_administrator_account_changed, User.default_admin_account_changed?],
       [:text_file_repository_writable, File.writable?(Attachment.storage_path)],
       [:text_plugin_assets_writable,   File.writable?(Redmine::Plugin.public_directory)],
       [:text_rmagick_available,        Object.const_defined?(:Magick)]

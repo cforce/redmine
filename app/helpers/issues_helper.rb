@@ -1,7 +1,7 @@
 # encoding: utf-8
 #
 # Redmine - project management software
-# Copyright (C) 2006-2011  Jean-Philippe Lang
+# Copyright (C) 2006-2012  Jean-Philippe Lang
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -65,7 +65,7 @@ module IssuesHelper
     s = ''
     ancestors = issue.root? ? [] : issue.ancestors.visible.all
     ancestors.each do |ancestor|
-      s << '<div>' + content_tag('p', link_to_issue(ancestor))
+      s << '<div>' + content_tag('p', link_to_issue(ancestor, :project => (issue.project_id != ancestor.project_id)))
     end
     s << '<div>'
     subject = h(issue.subject)
@@ -80,16 +80,69 @@ module IssuesHelper
   def render_descendants_tree(issue)
     s = '<form><table class="list issues">'
     issue_list(issue.descendants.visible.sort_by(&:lft)) do |child, level|
+      css = "issue issue-#{child.id} hascontextmenu"
+      css << " idnt idnt-#{level}" if level > 0
       s << content_tag('tr',
              content_tag('td', check_box_tag("ids[]", child.id, false, :id => nil), :class => 'checkbox') +
-             content_tag('td', link_to_issue(child, :truncate => 60), :class => 'subject') +
+             content_tag('td', link_to_issue(child, :truncate => 60, :project => (issue.project_id != child.project_id)), :class => 'subject') +
              content_tag('td', h(child.status)) +
              content_tag('td', link_to_user(child.assigned_to)) +
              content_tag('td', progress_bar(child.done_ratio, :width => '80px')),
-             :class => "issue issue-#{child.id} hascontextmenu #{level > 0 ? "idnt idnt-#{level}" : nil}")
+             :class => css)
     end
     s << '</table></form>'
     s.html_safe
+  end
+
+  # Returns a link for adding a new subtask to the given issue
+  def link_to_new_subtask(issue)
+    attrs = {
+      :tracker_id => issue.tracker,
+      :parent_issue_id => issue
+    }
+    link_to(l(:button_add), new_project_issue_path(issue.project, :issue => attrs))
+  end
+
+  class IssueFieldsRows
+    include ActionView::Helpers::TagHelper
+
+    def initialize
+      @left = []
+      @right = []
+    end
+
+    def left(*args)
+      args.any? ? @left << cells(*args) : @left
+    end
+
+    def right(*args)
+      args.any? ? @right << cells(*args) : @right
+    end
+
+    def size
+      @left.size > @right.size ? @left.size : @right.size
+    end
+
+    def to_html
+      html = ''.html_safe
+      blank = content_tag('th', '') + content_tag('td', '')
+      size.times do |i|
+        left = @left[i] || blank
+        right = @right[i] || blank
+        html << content_tag('tr', left + right)
+      end
+      html
+    end
+
+    def cells(label, text, options={})
+      content_tag('th', "#{label}:", options) + content_tag('td', text, options)
+    end
+  end
+
+  def issue_fields_rows
+    r = IssueFieldsRows.new
+    yield r
+    r.to_html
   end
 
   def render_custom_fields_rows(issue)
@@ -248,10 +301,17 @@ module IssuesHelper
     unless no_html
       label = content_tag('strong', label)
       old_value = content_tag("i", h(old_value)) if detail.old_value
-      old_value = content_tag("strike", old_value) if detail.old_value and detail.value.blank?
-      if detail.property == 'attachment' && !value.blank? && a = Attachment.find_by_id(detail.prop_key)
+      old_value = content_tag("del", old_value) if detail.old_value and detail.value.blank?
+      if detail.property == 'attachment' && !value.blank? && atta = Attachment.find_by_id(detail.prop_key)
         # Link to the attachment if it has not been removed
-        value = link_to_attachment(a, :download => true, :only_path => options[:only_path])
+        value = link_to_attachment(atta, :download => true, :only_path => options[:only_path])
+        if options[:only_path] != false && atta.is_text?
+          value += link_to(
+                       image_tag('magnifier.png'),
+                       :controller => 'attachments', :action => 'show',
+                       :id => atta, :filename => atta.filename
+                     )
+        end
       else
         value = content_tag("i", h(value)) if value
       end
@@ -261,7 +321,8 @@ module IssuesHelper
       s = l(:text_journal_changed_no_detail, :label => label)
       unless no_html
         diff_link = link_to 'diff',
-          {:controller => 'journals', :action => 'diff', :id => detail.journal_id, :detail_id => detail.id, :only_path => options[:only_path]},
+          {:controller => 'journals', :action => 'diff', :id => detail.journal_id,
+           :detail_id => detail.id, :only_path => options[:only_path]},
           :title => l(:label_view_diff)
         s << " (#{ diff_link })"
       end
@@ -324,7 +385,7 @@ module IssuesHelper
             cv = issue.custom_field_values.detect {|v| v.custom_field_id == column.custom_field.id}
             show_value(cv)
           else
-            value = issue.send(column.name)
+            value = column.value(issue)
             if value.is_a?(Date)
               format_date(value)
             elsif value.is_a?(Time)

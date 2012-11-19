@@ -1,5 +1,5 @@
 # Redmine - project management software
-# Copyright (C) 2006-2011  Jean-Philippe Lang
+# Copyright (C) 2006-2012  Jean-Philippe Lang
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -34,7 +34,7 @@ class News < ActiveRecord::Base
 
   after_create :add_author_as_watcher
 
-  named_scope :visible, lambda {|*args| {
+  scope :visible, lambda {|*args| {
     :include => :project,
     :conditions => Project.allowed_to_condition(args.shift || User.current, :view_news, *args)
   }}
@@ -52,10 +52,7 @@ class News < ActiveRecord::Base
 
   # returns latest news for projects visible by user
   def self.latest(user = User.current, count = 5)
-    find(:all, :limit => count,
-         :conditions => Project.allowed_to_condition(user, :view_news),
-         :include => [ :author, :project ],
-         :order => "#{News.table_name}.created_on DESC")	
+    visible(user).includes([:author, :project]).order("#{News.table_name}.created_on DESC").limit(count).all
   end
 
   private

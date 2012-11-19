@@ -1,5 +1,5 @@
 # Redmine - project management software
-# Copyright (C) 2006-2011  Jean-Philippe Lang
+# Copyright (C) 2006-2012  Jean-Philippe Lang
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -22,7 +22,8 @@ require 'mail_handler_controller'
 class MailHandlerController; def rescue_action(e) raise e end; end
 
 class MailHandlerControllerTest < ActionController::TestCase
-  fixtures :users, :projects, :enabled_modules, :roles, :members, :member_roles, :issues, :issue_statuses, :trackers, :enumerations
+  fixtures :users, :projects, :enabled_modules, :roles, :members, :member_roles, :issues, :issue_statuses,
+           :trackers, :projects_trackers, :enumerations
 
   FIXTURES_PATH = File.dirname(__FILE__) + '/../fixtures/mail_handler'
 

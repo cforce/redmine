@@ -1,5 +1,5 @@
 # Redmine - project management software
-# Copyright (C) 2006-2011  Jean-Philippe Lang
+# Copyright (C) 2006-2012  Jean-Philippe Lang
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -18,12 +18,13 @@
 class TimelogController < ApplicationController
   menu_item :issues
 
-  before_filter :find_project, :only => [:create]
+  before_filter :find_project_for_new_time_entry, :only => [:create]
   before_filter :find_time_entry, :only => [:show, :edit, :update]
   before_filter :find_time_entries, :only => [:bulk_edit, :bulk_update, :destroy]
   before_filter :authorize, :except => [:new, :index, :report]
 
-  before_filter :find_optional_project, :only => [:new, :index, :report]
+  before_filter :find_optional_project, :only => [:index, :report]
+  before_filter :find_optional_project_for_new_time_entry, :only => [:new]
   before_filter :authorize_global, :only => [:new, :index, :report]
 
   accept_rss_auth :index
@@ -38,7 +39,7 @@ class TimelogController < ApplicationController
 
   def index
     sort_init 'spent_on', 'desc'
-    sort_update 'spent_on' => 'spent_on',
+    sort_update 'spent_on' => ['spent_on', "#{TimeEntry.table_name}.created_on"],
                 'user' => 'user_id',
                 'activity' => 'activity_id',
                 'project' => "#{Project.table_name}.name",
@@ -133,9 +134,13 @@ class TimelogController < ApplicationController
           flash[:notice] = l(:notice_successful_create)
           if params[:continue]
             if params[:project_id]
-              redirect_to :action => 'new', :project_id => @time_entry.project, :issue_id => @time_entry.issue, :back_url => params[:back_url]
+              redirect_to :action => 'new', :project_id => @time_entry.project, :issue_id => @time_entry.issue,
+                :time_entry => {:issue_id => @time_entry.issue_id, :activity_id => @time_entry.activity_id},
+                :back_url => params[:back_url]
             else
-              redirect_to :action => 'new', :back_url => params[:back_url]
+              redirect_to :action => 'new',
+                :time_entry => {:project_id => @time_entry.project_id, :issue_id => @time_entry.issue_id, :activity_id => @time_entry.activity_id},
+                :back_url => params[:back_url]
             end
           else
             redirect_back_or_default :action => 'index', :project_id => @time_entry.project
@@ -166,7 +171,7 @@ class TimelogController < ApplicationController
           flash[:notice] = l(:notice_successful_update)
           redirect_back_or_default :action => 'index', :project_id => @time_entry.project
         }
-        format.api  { head :ok }
+        format.api  { render_api_ok }
       end
     else
       respond_to do |format|
@@ -218,7 +223,7 @@ class TimelogController < ApplicationController
       }
       format.api  {
         if destroyed
-          head :ok
+          render_api_ok
         else
           render_validation_errors(@time_entries)
         end
@@ -258,7 +263,7 @@ private
     end
   end
 
-  def find_project
+  def find_optional_project_for_new_time_entry
     if (project_id = (params[:project_id] || params[:time_entry] && params[:time_entry][:project_id])).present?
       @project = Project.find(project_id)
     end
@@ -266,12 +271,15 @@ private
       @issue = Issue.find(issue_id)
       @project ||= @issue.project
     end
-    if @project.nil?
-      render_404
-      return false
-    end
   rescue ActiveRecord::RecordNotFound
     render_404
+  end
+
+  def find_project_for_new_time_entry
+    find_optional_project_for_new_time_entry
+    if @project.nil?
+      render_404
+    end
   end
 
   def find_optional_project
@@ -300,6 +308,9 @@ private
       when 'last_week'
         @from = Date.today - 7 - (Date.today.cwday - 1)%7
         @to = @from + 6
+      when 'last_2_weeks'
+        @from = Date.today - 14 - (Date.today.cwday - 1)%7
+        @to = @from + 13
       when '7_days'
         @from = Date.today - 7
         @to = Date.today

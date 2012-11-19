@@ -1,5 +1,5 @@
 # Redmine - project management software
-# Copyright (C) 2006-2011  Jean-Philippe Lang
+# Copyright (C) 2006-2012  Jean-Philippe Lang
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -226,6 +226,7 @@ class ApiTest::ProjectsTest < ActionController::IntegrationTest
             put '/projects/2.xml', @parameters, credentials('jsmith')
           end
           assert_response :ok
+          assert_equal '', @response.body
           assert_equal 'application/xml', @response.content_type
           project = Project.find(2)
           assert_equal 'API update', project.name
@@ -238,6 +239,7 @@ class ApiTest::ProjectsTest < ActionController::IntegrationTest
             put '/projects/2.xml', @parameters, credentials('admin')
           end
           assert_response :ok
+          assert_equal '', @response.body
           project = Project.find(2)
           assert_equal ['issue_tracking', 'news', 'time_tracking'], project.enabled_module_names.sort
         end
@@ -249,6 +251,7 @@ class ApiTest::ProjectsTest < ActionController::IntegrationTest
             put '/projects/2.xml', @parameters, credentials('admin')
           end
           assert_response :ok
+          assert_equal '', @response.body
           project = Project.find(2)
           assert_equal [1, 3], project.trackers.map(&:id).sort
         end
@@ -286,6 +289,7 @@ class ApiTest::ProjectsTest < ActionController::IntegrationTest
           delete '/projects/2.xml', {}, credentials('admin')
         end
         assert_response :ok
+        assert_equal '', @response.body
         assert_nil Project.find_by_id(2)
       end
     end

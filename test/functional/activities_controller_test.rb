@@ -48,43 +48,52 @@ class ActivitiesControllerTest < ActionController::TestCase
                  :child => { :tag => "dt",
                    :attributes => { :class => /issue/ },
                    :child => { :tag => "a",
-                     :content => /#{Issue.find(1).subject}/,
+                     :content => /Can&#x27;t print recipes/,
                    }
                  }
                }
   end
 
   def test_global_index
+    @request.session[:user_id] = 1
     get :index
     assert_response :success
     assert_template 'index'
     assert_not_nil assigns(:events_by_day)
 
+    i5 = Issue.find(5)
+    d5 = User.find(1).time_to_date(i5.created_on)
     assert_tag :tag => "h3",
-               :content => /#{5.day.ago.to_date.day}/,
+               :content => /#{d5.day}/,
                :sibling => { :tag => "dl",
                  :child => { :tag => "dt",
                    :attributes => { :class => /issue/ },
                    :child => { :tag => "a",
-                     :content => /#{Issue.find(5).subject}/,
+                     :content => /Subproject issue/,
                    }
                  }
                }
   end
 
   def test_user_index
+    @request.session[:user_id] = 1
     get :index, :user_id => 2
     assert_response :success
     assert_template 'index'
     assert_not_nil assigns(:events_by_day)
 
+    assert_select 'h2 a[href=/users/2]', :text => 'John Smith'
+
+    i1 = Issue.find(1)
+    d1 = User.find(1).time_to_date(i1.created_on)
+
     assert_tag :tag => "h3",
-               :content => /#{3.day.ago.to_date.day}/,
+               :content => /#{d1.day}/,
                :sibling => { :tag => "dl",
                  :child => { :tag => "dt",
                    :attributes => { :class => /issue/ },
                    :child => { :tag => "a",
-                     :content => /#{Issue.find(1).subject}/,
+                     :content => /Can&#x27;t print recipes/,
                    }
                  }
                }
@@ -139,5 +148,19 @@ class ActivitiesControllerTest < ActionController::TestCase
     assert_response :success
     assert_template 'common/feed'
     assert_tag :tag => 'title', :content => /Issues/
+  end
+
+  def test_index_should_show_private_notes_with_permission_only
+    journal = Journal.create!(:journalized => Issue.find(2), :notes => 'Private notes with searchkeyword', :private_notes => true)
+    @request.session[:user_id] = 2
+
+    get :index
+    assert_response :success
+    assert_include journal, assigns(:events_by_day).values.flatten
+
+    Role.find(1).remove_permission! :view_private_notes
+    get :index
+    assert_response :success
+    assert_not_include journal, assigns(:events_by_day).values.flatten
   end
 end

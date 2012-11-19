@@ -24,6 +24,7 @@ class Attachment < ActiveRecord::Base
   validates_presence_of :filename, :author
   validates_length_of :filename, :maximum => 255
   validates_length_of :disk_filename, :maximum => 255
+  validates_length_of :description, :maximum => 255
   validate :validate_max_file_size
 
   acts_as_event :title => :filename,
@@ -44,19 +45,13 @@ class Attachment < ActiveRecord::Base
                                                         "LEFT JOIN #{Project.table_name} ON #{Document.table_name}.project_id = #{Project.table_name}.id"}
 
   cattr_accessor :storage_path
-  @@storage_path = Redmine::Configuration['attachments_storage_path'] || "#{Rails.root}/files"
+  @@storage_path = Redmine::Configuration['attachments_storage_path'] || File.join(Rails.root, "files")
+
+  cattr_accessor :thumbnails_storage_path
+  @@thumbnails_storage_path = File.join(Rails.root, "tmp", "thumbnails")
 
   before_save :files_to_final_location
   after_destroy :delete_from_disk
-
-  def container_with_blank_type_check
-    if container_type.blank?
-      nil
-    else
-      container_without_blank_type_check
-    end
-  end
-  alias_method_chain :container, :blank_type_check unless method_defined?(:container_without_blank_type_check)
 
   # Returns an unsaved copy of the attachment
   def copy(attributes=nil)
@@ -78,6 +73,7 @@ class Attachment < ActiveRecord::Base
       if @temp_file.size > 0
         if @temp_file.respond_to?(:original_filename)
           self.filename = @temp_file.original_filename
+          self.filename.force_encoding("UTF-8") if filename.respond_to?(:force_encoding)
         end
         if @temp_file.respond_to?(:content_type)
           self.content_type = @temp_file.content_type.to_s.chomp
@@ -109,10 +105,15 @@ class Attachment < ActiveRecord::Base
       logger.info("Saving attachment '#{self.diskfile}' (#{@temp_file.size} bytes)")
       md5 = Digest::MD5.new
       File.open(diskfile, "wb") do |f|
-        buffer = ""
-        while (buffer = @temp_file.read(8192))
-          f.write(buffer)
-          md5.update(buffer)
+        if @temp_file.respond_to?(:read)
+          buffer = ""
+          while (buffer = @temp_file.read(8192))
+            f.write(buffer)
+            md5.update(buffer)
+          end
+        else
+          f.write(@temp_file)
+          md5.update(@temp_file)
         end
       end
       self.digest = md5.hexdigest
@@ -126,14 +127,22 @@ class Attachment < ActiveRecord::Base
 
   # Deletes the file from the file system if it's not referenced by other attachments
   def delete_from_disk
-    if Attachment.first(:conditions => ["disk_filename = ? AND id <> ?", disk_filename, id]).nil?
+    if Attachment.where("disk_filename = ? AND id <> ?", disk_filename, id).empty?
       delete_from_disk!
     end
   end
 
   # Returns file's location on disk
   def diskfile
-    "#{@@storage_path}/#{self.disk_filename}"
+    File.join(self.class.storage_path, disk_filename.to_s)
+  end
+
+  def title
+    title = filename.to_s
+    if description.present?
+      title << " (#{description})"
+    end
+    title
   end
 
   def increment_download
@@ -153,7 +162,43 @@ class Attachment < ActiveRecord::Base
   end
 
   def image?
-    self.filename =~ /\.(bmp|gif|jpg|jpe|jpeg|png)$/i
+    !!(self.filename =~ /\.(bmp|gif|jpg|jpe|jpeg|png)$/i)
+  end
+
+  def thumbnailable?
+    image?
+  end
+
+  # Returns the full path the attachment thumbnail, or nil
+  # if the thumbnail cannot be generated.
+  def thumbnail(options={})
+    if thumbnailable? && readable?
+      size = options[:size].to_i
+      if size > 0
+        # Limit the number of thumbnails per image
+        size = (size / 50) * 50
+        # Maximum thumbnail size
+        size = 800 if size > 800
+      else
+        size = Setting.thumbnails_size.to_i
+      end
+      size = 100 unless size > 0
+      target = File.join(self.class.thumbnails_storage_path, "#{id}_#{digest}_#{size}.thumb")
+
+      begin
+        Redmine::Thumbnail.generate(self.diskfile, target, size)
+      rescue => e
+        logger.error "An error occured while generating thumbnail for #{disk_filename} to #{target}\nException was: #{e.message}" if logger
+        return nil
+      end
+    end
+  end
+
+  # Deletes all thumbnails
+  def self.clear_thumbnails
+    Dir.glob(File.join(thumbnails_storage_path, "*.thumb")).each do |file|
+      File.delete file
+    end
   end
 
   def is_text?
@@ -178,7 +223,7 @@ class Attachment < ActiveRecord::Base
   def self.find_by_token(token)
     if token.to_s =~ /^(\d+)\.([0-9a-f]+)$/
       attachment_id, attachment_digest = $1, $2
-      attachment = Attachment.first(:conditions => {:id => attachment_id, :digest => attachment_digest})
+      attachment = Attachment.where(:id => attachment_id, :digest => attachment_digest).first
       if attachment && attachment.container.nil?
         attachment
       end
@@ -203,8 +248,7 @@ class Attachment < ActiveRecord::Base
   end
 
   def self.prune(age=1.day)
-    attachments = Attachment.all(:conditions => ["created_on < ? AND (container_type IS NULL OR container_type = '')", Time.now - age])
-    attachments.each(&:destroy)
+    Attachment.where("created_on < ? AND (container_type IS NULL OR container_type = '')", Time.now - age).destroy_all
   end
 
   private

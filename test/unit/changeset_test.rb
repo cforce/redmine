@@ -1,7 +1,7 @@
 # encoding: utf-8
 #
 # Redmine - project management software
-# Copyright (C) 2006-2011  Jean-Philippe Lang
+# Copyright (C) 2006-2012  Jean-Philippe Lang
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -27,9 +27,6 @@ class ChangesetTest < ActiveSupport::TestCase
            :custom_fields, :custom_values,
            :users, :members, :member_roles, :trackers,
            :enabled_modules, :roles
-
-  def setup
-  end
 
   def test_ref_keywords_any
     ActionMailer::Base.deliveries.clear
@@ -179,7 +176,8 @@ class ChangesetTest < ActiveSupport::TestCase
   end
 
   def test_commit_closing_a_subproject_issue
-    with_settings :commit_fix_status_id => 5, :commit_fix_keywords => 'closes' do
+    with_settings :commit_fix_status_id => 5, :commit_fix_keywords => 'closes',
+                  :default_language => 'en' do
       issue = Issue.find(5)
       assert !issue.closed?
       assert_difference 'Journal.count' do

@@ -1,5 +1,5 @@
 # Redmine - project management software
-# Copyright (C) 2006-2011  Jean-Philippe Lang
+# Copyright (C) 2006-2012  Jean-Philippe Lang
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -44,7 +44,7 @@ class UserPreference < ActiveRecord::Base
     if attribute_present? attr_name
       super
     else
-      h = read_attribute(:others).dup || {}
+      h = (read_attribute(:others) || {}).dup
       h.update(attr_name => value)
       write_attribute(:others, h)
       value

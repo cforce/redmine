@@ -505,7 +505,7 @@ class RedCloth3 < String
         atts
     end
 
-    STYLES_RE = /^(color|width|height|border|background|padding|margin|font|text)(-[a-z]+)*:\s*((\d+%?|\d+px|\d+(\.\d+)?em|#[0-9a-f]+|[a-z]+)\s*)+$/i
+    STYLES_RE = /^(color|width|height|border|background|padding|margin|font|text|float)(-[a-z]+)*:\s*((\d+%?|\d+px|\d+(\.\d+)?em|#[0-9a-f]+|[a-z]+)\s*)+$/i
 
     def sanitize_styles(str)
       styles = str.split(";").map(&:strip)
@@ -585,7 +585,7 @@ class RedCloth3 < String
                     last_line = line_id
                 end
                 if line_id - last_line > 1 or line_id == lines.length - 1
-                    depth.delete_if do |v|
+                    while v = depth.pop
                         lines[last_line] << "</li>\n\t</#{ lT( v ) }l>"
                     end
                 end
