@@ -1,5 +1,5 @@
 # Redmine - project management software
-# Copyright (C) 2006-2011  Jean-Philippe Lang
+# Copyright (C) 2006-2012  Jean-Philippe Lang
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -24,7 +24,9 @@ class UsersController; def rescue_action(e) raise e end; end
 class UsersControllerTest < ActionController::TestCase
   include Redmine::I18n
 
-  fixtures :users, :projects, :members, :member_roles, :roles, :custom_fields, :custom_values, :groups_users, :auth_sources
+  fixtures :users, :projects, :members, :member_roles, :roles,
+           :custom_fields, :custom_values, :groups_users,
+           :auth_sources
 
   def setup
     @controller = UsersController.new
@@ -74,6 +76,9 @@ class UsersControllerTest < ActionController::TestCase
     users = assigns(:users)
     assert users.any?
     assert_equal([], (users - Group.find(10).users))
+    assert_select 'select[name=group_id]' do
+      assert_select 'option[value=10][selected=selected]'
+    end
   end
 
   def test_show
@@ -153,7 +158,6 @@ class UsersControllerTest < ActionController::TestCase
 
   def test_new
     get :new
-
     assert_response :success
     assert_template :new
     assert assigns(:user)
@@ -225,14 +229,12 @@ class UsersControllerTest < ActionController::TestCase
     assert_no_difference 'User.count' do
       post :create, :user => {}
     end
-
     assert_response :success
     assert_template 'new'
   end
 
   def test_edit
     get :edit, :id => 2
-
     assert_response :success
     assert_template 'edit'
     assert_equal User.find(2), assigns(:user)
@@ -240,8 +242,9 @@ class UsersControllerTest < ActionController::TestCase
 
   def test_update
     ActionMailer::Base.deliveries.clear
-    put :update, :id => 2, :user => {:firstname => 'Changed', :mail_notification => 'only_assigned'}, :pref => {:hide_mail => '1', :comments_sorting => 'desc'}
-
+    put :update, :id => 2,
+        :user => {:firstname => 'Changed', :mail_notification => 'only_assigned'},
+        :pref => {:hide_mail => '1', :comments_sorting => 'desc'}
     user = User.find(2)
     assert_equal 'Changed', user.firstname
     assert_equal 'only_assigned', user.mail_notification
@@ -254,14 +257,12 @@ class UsersControllerTest < ActionController::TestCase
     assert_no_difference 'User.count' do
       put :update, :id => 2, :user => {:firstname => ''}
     end
-
     assert_response :success
     assert_template 'edit'
   end
 
   def test_update_with_group_ids_should_assign_groups
     put :update, :id => 2, :user => {:group_ids => ['10']}
-
     user = User.find(2)
     assert_equal [10], user.group_ids
   end
@@ -308,6 +309,29 @@ class UsersControllerTest < ActionController::TestCase
     assert u.check_password?('newpass')
   end
 
+  def test_update_notified_project
+    get :edit, :id => 2
+    assert_response :success
+    assert_template 'edit'
+    u = User.find(2)
+    assert_equal [1, 2, 5], u.projects.collect{|p| p.id}.sort
+    assert_equal [1, 2, 5], u.notified_projects_ids.sort
+    assert_tag :tag => 'input',
+               :attributes => {
+                  :id    => 'notified_project_ids_',
+                  :value => 1,
+                }
+    assert_equal 'all', u.mail_notification
+    put :update, :id => 2,
+        :user => {
+           :mail_notification => 'selected',
+         },
+        :notified_project_ids => [1, 2]
+    u = User.find(2)
+    assert_equal 'selected', u.mail_notification
+    assert_equal [1, 2], u.notified_projects_ids.sort
+  end
+
   def test_destroy
     assert_difference 'User.count', -1 do
       delete :destroy, :id => 2
@@ -325,6 +349,13 @@ class UsersControllerTest < ActionController::TestCase
     assert_response 403
   end
 
+  def test_destroy_should_redirect_to_back_url_param
+    assert_difference 'User.count', -1 do
+      delete :destroy, :id => 2, :back_url => '/users?name=foo'
+    end
+    assert_redirected_to '/users?name=foo'
+  end
+
   def test_create_membership
     assert_difference 'Member.count' do
       post :edit_membership, :id => 7, :membership => { :project_id => 3, :role_ids => [2]}
@@ -339,38 +370,45 @@ class UsersControllerTest < ActionController::TestCase
   def test_create_membership_js_format
     assert_difference 'Member.count' do
       post :edit_membership, :id => 7, :membership => {:project_id => 3, :role_ids => [2]}, :format => 'js'
+      assert_response :success
+      assert_template 'edit_membership'
+      assert_equal 'text/javascript', response.content_type
     end
-    assert_response :success
-    assert_select_rjs :replace_html, 'tab-content-memberships'
     member = Member.first(:order => 'id DESC')
     assert_equal User.find(7), member.principal
     assert_equal [2], member.role_ids
     assert_equal 3, member.project_id
+    assert_include 'tab-content-memberships', response.body
   end
 
   def test_create_membership_js_format_with_failure
     assert_no_difference 'Member.count' do
       post :edit_membership, :id => 7, :membership => {:project_id => 3}, :format => 'js'
+      assert_response :success
+      assert_template 'edit_membership'
+      assert_equal 'text/javascript', response.content_type
     end
-    assert_response :success
-    assert @response.body.match(/alert/i), "Alert message not sent"
-    assert @response.body.match(/role can't be empty/i), "Error message not sent"
+    assert_include 'alert', response.body, "Alert message not sent"
+    assert_include 'Role can\\\'t be empty', response.body, "Error message not sent"
   end
 
   def test_update_membership
     assert_no_difference 'Member.count' do
       put :edit_membership, :id => 2, :membership_id => 1, :membership => { :role_ids => [2]}
+      assert_redirected_to :action => 'edit', :id => '2', :tab => 'memberships'
     end
-    assert_redirected_to :action => 'edit', :id => '2', :tab => 'memberships'
     assert_equal [2], Member.find(1).role_ids
   end
 
   def test_update_membership_js_format
     assert_no_difference 'Member.count' do
       put :edit_membership, :id => 2, :membership_id => 1, :membership => {:role_ids => [2]}, :format => 'js'
+      assert_response :success
+      assert_template 'edit_membership'
+      assert_equal 'text/javascript', response.content_type
     end
-    assert_response :success
-    assert_select_rjs :replace_html, 'tab-content-memberships'
+    assert_equal [2], Member.find(1).role_ids
+    assert_include 'tab-content-memberships', response.body
   end
 
   def test_destroy_membership
@@ -384,8 +422,11 @@ class UsersControllerTest < ActionController::TestCase
   def test_destroy_membership_js_format
     assert_difference 'Member.count', -1 do
       delete :destroy_membership, :id => 2, :membership_id => 1, :format => 'js'
+      assert_response :success
+      assert_template 'destroy_membership'
+      assert_equal 'text/javascript', response.content_type
     end
-    assert_response :success
-    assert_select_rjs :replace_html, 'tab-content-memberships'
+    assert_nil Member.find_by_id(1)
+    assert_include 'tab-content-memberships', response.body
   end
 end

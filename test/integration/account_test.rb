@@ -1,5 +1,5 @@
 # Redmine - project management software
-# Copyright (C) 2006-2011  Jean-Philippe Lang
+# Copyright (C) 2006-2012  Jean-Philippe Lang
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -66,7 +66,6 @@ class AccountTest < ActionController::IntegrationTest
     assert_template 'my/page'
     assert_equal user.id, session[:user_id]
     assert_not_nil user.reload.last_login_on
-    assert user.last_login_on.utc > 10.second.ago.utc
   end
 
   def test_lost_password
@@ -75,6 +74,7 @@ class AccountTest < ActionController::IntegrationTest
     get "account/lost_password"
     assert_response :success
     assert_template "account/lost_password"
+    assert_select 'input[name=mail]'
 
     post "account/lost_password", :mail => 'jSmith@somenet.foo'
     assert_redirected_to "/login"
@@ -87,6 +87,9 @@ class AccountTest < ActionController::IntegrationTest
     get "account/lost_password", :token => token.value
     assert_response :success
     assert_template "account/password_recovery"
+    assert_select 'input[type=hidden][name=token][value=?]', token.value
+    assert_select 'input[name=new_password]'
+    assert_select 'input[name=new_password_confirmation]'
 
     post "account/lost_password", :token => token.value, :new_password => 'newpass', :new_password_confirmation => 'newpass'
     assert_redirected_to "/login"

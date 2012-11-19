@@ -1,5 +1,5 @@
 # Redmine - project management software
-# Copyright (C) 2006-2011  Jean-Philippe Lang
+# Copyright (C) 2006-2012  Jean-Philippe Lang
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -18,6 +18,7 @@
 require 'iconv'
 require 'net/ldap'
 require 'net/ldap/dn'
+require 'timeout'
 
 class AuthSourceLdap < AuthSource
   validates_presence_of :host, :port, :attr_login
@@ -25,17 +26,10 @@ class AuthSourceLdap < AuthSource
   validates_length_of :account, :account_password, :base_dn, :filter, :maximum => 255, :allow_blank => true
   validates_length_of :attr_login, :attr_firstname, :attr_lastname, :attr_mail, :maximum => 30, :allow_nil => true
   validates_numericality_of :port, :only_integer => true
+  validates_numericality_of :timeout, :only_integer => true, :allow_blank => true
   validate :validate_filter
 
   before_validation :strip_ldap_attributes
-
-  def self.human_attribute_name(attribute_key_name, *args)
-    attr_name = attribute_key_name.to_s
-    if attr_name == "filter"
-      attr_name = "ldap_filter"
-    end
-    super(attr_name, *args)
-  end
 
   def initialize(attributes=nil, *args)
     super
@@ -44,22 +38,26 @@ class AuthSourceLdap < AuthSource
 
   def authenticate(login, password)
     return nil if login.blank? || password.blank?
-    attrs = get_user_dn(login, password)
 
-    if attrs && attrs[:dn] && authenticate_dn(attrs[:dn], password)
-      logger.debug "Authentication successful for '#{login}'" if logger && logger.debug?
-      return attrs.except(:dn)
+    with_timeout do
+      attrs = get_user_dn(login, password)
+      if attrs && attrs[:dn] && authenticate_dn(attrs[:dn], password)
+        logger.debug "Authentication successful for '#{login}'" if logger && logger.debug?
+        return attrs.except(:dn)
+      end
     end
-  rescue  Net::LDAP::LdapError => e
+  rescue Net::LDAP::LdapError => e
     raise AuthSourceException.new(e.message)
   end
 
   # test the connection to the LDAP
   def test_connection
-    ldap_con = initialize_ldap_con(self.account, self.account_password)
-    ldap_con.open { }
-  rescue  Net::LDAP::LdapError => e
-    raise "LdapError: " + e.message
+    with_timeout do
+      ldap_con = initialize_ldap_con(self.account, self.account_password)
+      ldap_con.open { }
+    end
+  rescue Net::LDAP::LdapError => e
+    raise AuthSourceException.new(e.message)
   end
 
   def auth_method_name
@@ -67,6 +65,16 @@ class AuthSourceLdap < AuthSource
   end
 
   private
+
+  def with_timeout(&block)
+    timeout = self.timeout
+    timeout = 20 unless timeout && timeout > 0
+    Timeout.timeout(timeout) do
+      return yield
+    end
+  rescue Timeout::Error => e
+    raise AuthSourceTimeoutException.new(e.message)
+  end
 
   def ldap_filter
     if filter.present?

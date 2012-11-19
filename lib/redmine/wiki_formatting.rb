@@ -1,5 +1,5 @@
 # Redmine - project management software
-# Copyright (C) 2006-2011  Jean-Philippe Lang
+# Copyright (C) 2006-2012  Jean-Philippe Lang
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -14,6 +14,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+require 'digest/md5'
 
 module Redmine
   module WikiFormatting
@@ -50,7 +52,7 @@ module Redmine
       end
 
       def to_html(format, text, options = {})
-        text = if Setting.cache_formatted_text? && text.size > 2.kilobyte && cache_store && cache_key = cache_key_for(format, options[:object], options[:attribute])
+        text = if Setting.cache_formatted_text? && text.size > 2.kilobyte && cache_store && cache_key = cache_key_for(format, text, options[:object], options[:attribute])
           # Text retrieved from the cache store may be frozen
           # We need to dup it so we can do in-place substitutions with gsub!
           cache_store.fetch cache_key do
@@ -67,10 +69,10 @@ module Redmine
         (formatter.instance_methods & ['update_section', :update_section]).any?
       end
 
-      # Returns a cache key for the given text +format+, +object+ and +attribute+ or nil if no caching should be done
-      def cache_key_for(format, object, attribute)
-        if object && attribute && !object.new_record? && object.respond_to?(:updated_on) && !format.blank?
-          "formatted_text/#{format}/#{object.class.model_name.cache_key}/#{object.id}-#{attribute}-#{object.updated_on.to_s(:number)}"
+      # Returns a cache key for the given text +format+, +text+, +object+ and +attribute+ or nil if no caching should be done
+      def cache_key_for(format, text, object, attribute)
+        if object && attribute && !object.new_record? && format.present?
+          "formatted_text/#{format}/#{object.class.model_name.cache_key}/#{object.id}-#{attribute}-#{Digest::MD5.hexdigest text}"
         end
       end
 
@@ -115,8 +117,9 @@ module Redmine
               url=url[0..-2] # discard closing parenth from url
               post = ")"+post # add closing parenth to post
             end
-            tag = content_tag('a', proto + url, :href => "#{proto=="www."?"http://www.":proto}#{url}", :class => 'external')
-            %(#{leading}#{tag}#{post})
+            content = proto + url
+            href = "#{proto=="www."?"http://www.":proto}#{url}"
+            %(#{leading}<a class="external" href="#{ERB::Util.html_escape href}">#{ERB::Util.html_escape content}</a>#{post}).html_safe
           end
         end
       end
@@ -128,7 +131,7 @@ module Redmine
           if text.match(/<a\b[^>]*>(.*)(#{Regexp.escape(mail)})(.*)<\/a>/)
             mail
           else
-            content_tag('a', mail, :href => "mailto:#{mail}", :class => "email")
+            %(<a class="email" href="mailto:#{ERB::Util.html_escape mail}">#{ERB::Util.html_escape mail}</a>).html_safe
           end
         end
       end      
@@ -150,7 +153,7 @@ module Redmine
           t = CGI::escapeHTML(@text)
           auto_link!(t)
           auto_mailto!(t)
-          simple_format(t)
+          simple_format(t, {}, :sanitize => false)
         end
       end
 

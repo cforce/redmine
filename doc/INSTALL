@@ -13,7 +13,7 @@ http://www.redmine.org/
 
 * A database:
   * MySQL (tested with MySQL 5.1)
-  * PostgreSQL (tested with PostgreSQL 8.4)
+  * PostgreSQL (tested with PostgreSQL 9.1)
   * SQLite3 (tested with SQLite 3.6)
 
 Optional:
@@ -31,16 +31,23 @@ Optional:
    of the rmagick gem using:
      bundle install --without development test rmagick
 
+   If you need to load some gems that are not required by Redmine core (eg. fcgi),
+   you can create a file named Gemfile.local at the root of your redmine directory.
+   It will be loaded automatically when running `bundle install`.
+
 3. Create an empty utf8 encoded database: "redmine" for example
 
 4. Configure the database parameters in config/database.yml
-   for the "production" environment (default database is MySQL)
+   for the "production" environment (default database is MySQL and ruby1.8)
+
+   If you're running Redmine with MySQL and ruby1.9, replace the adapter name
+   with `mysql2`
 
 5. Generate a session store secret
    
    Redmine stores session data in cookies by default, which requires
    a secret to be generated. Under the application main directory run:
-     rake generate_session_store
+     rake generate_secret_token
 
 6. Create the database structure
    
@@ -61,7 +68,7 @@ Optional:
 8. Test the installation by running the WEBrick web server
    
    Under the main application directory run:
-     ruby script/server -e production
+     ruby script/rails server -e production
    
    Once WEBrick has started, point your browser to http://localhost:3000/
    You should now see the application welcome page.

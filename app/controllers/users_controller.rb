@@ -1,5 +1,5 @@
 # Redmine - project management software
-# Copyright (C) 2006-2011  Jean-Philippe Lang
+# Copyright (C) 2006-2012  Jean-Philippe Lang
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -99,11 +99,11 @@ class UsersController < ApplicationController
       @user.pref.save
       @user.notified_project_ids = (@user.mail_notification == 'selected' ? params[:notified_project_ids] : [])
 
-      Mailer.deliver_account_information(@user, params[:user][:password]) if params[:send_information]
+      Mailer.account_information(@user, params[:user][:password]).deliver if params[:send_information]
 
       respond_to do |format|
         format.html {
-          flash[:notice] = l(:notice_successful_create)
+          flash[:notice] = l(:notice_user_successful_create, :id => view_context.link_to(@user.login, user_path(@user)))
           redirect_to(params[:continue] ?
             {:controller => 'users', :action => 'new'} :
             {:controller => 'users', :action => 'edit', :id => @user}
@@ -146,17 +146,17 @@ class UsersController < ApplicationController
       @user.notified_project_ids = (@user.mail_notification == 'selected' ? params[:notified_project_ids] : [])
 
       if was_activated
-        Mailer.deliver_account_activated(@user)
+        Mailer.account_activated(@user).deliver
       elsif @user.active? && params[:send_information] && !params[:user][:password].blank? && @user.auth_source_id.nil?
-        Mailer.deliver_account_information(@user, params[:user][:password])
+        Mailer.account_information(@user, params[:user][:password]).deliver
       end
 
       respond_to do |format|
         format.html {
           flash[:notice] = l(:notice_successful_update)
-          redirect_to :back
+          redirect_to_referer_or edit_user_path(@user)
         }
-        format.api  { head :ok }
+        format.api  { render_api_ok }
       end
     else
       @auth_sources = AuthSource.find(:all)
@@ -169,15 +169,13 @@ class UsersController < ApplicationController
         format.api  { render_validation_errors(@user) }
       end
     end
-  rescue ::ActionController::RedirectBackError
-    redirect_to :controller => 'users', :action => 'edit', :id => @user
   end
 
   def destroy
     @user.destroy
     respond_to do |format|
-      format.html { redirect_to(users_url) }
-      format.api  { head :ok }
+      format.html { redirect_back_or_default(users_url) }
+      format.api  { render_api_ok }
     end
   end
 
@@ -185,21 +183,8 @@ class UsersController < ApplicationController
     @membership = Member.edit_membership(params[:membership_id], params[:membership], @user)
     @membership.save
     respond_to do |format|
-      if @membership.valid?
-        format.html { redirect_to :controller => 'users', :action => 'edit', :id => @user, :tab => 'memberships' }
-        format.js {
-          render(:update) {|page|
-            page.replace_html "tab-content-memberships", :partial => 'users/memberships'
-            page.visual_effect(:highlight, "member-#{@membership.id}")
-          }
-        }
-      else
-        format.js {
-          render(:update) {|page|
-            page.alert(l(:notice_failed_to_save_members, :errors => @membership.errors.full_messages.join(', ')))
-          }
-        }
-      end
+      format.html { redirect_to :controller => 'users', :action => 'edit', :id => @user, :tab => 'memberships' }
+      format.js
     end
   end
 
@@ -210,7 +195,7 @@ class UsersController < ApplicationController
     end
     respond_to do |format|
       format.html { redirect_to :controller => 'users', :action => 'edit', :id => @user, :tab => 'memberships' }
-      format.js { render(:update) {|page| page.replace_html "tab-content-memberships", :partial => 'users/memberships'} }
+      format.js
     end
   end
 

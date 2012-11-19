@@ -1,5 +1,5 @@
 # Redmine - project management software
-# Copyright (C) 2006-2011  Jean-Philippe Lang
+# Copyright (C) 2006-2012  Jean-Philippe Lang
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -50,13 +50,13 @@ class IssuesController < ApplicationController
   include SortHelper
   include IssuesHelper
   helper :timelog
-  helper :gantt
   include Redmine::Export::PDF
 
   def index
     retrieve_query
     sort_init(@query.sort_criteria.empty? ? [['id', 'desc']] : @query.sort_criteria)
     sort_update(@query.sortable_columns)
+    @query.sort_criteria = sort_criteria.to_a
 
     if @query.valid?
       case params[:format]
@@ -82,7 +82,7 @@ class IssuesController < ApplicationController
       respond_to do |format|
         format.html { render :template => 'issues/index', :layout => !request.xhr? }
         format.api  {
-          Issue.load_relations(@issues) if include_in_api_response?('relations')
+          Issue.load_visible_relations(@issues) if include_in_api_response?('relations')
         }
         format.atom { render_feed(@issues, :title => "#{@project || Setting.app_title}: #{l(:label_issue_plural)}") }
         format.csv  { send_data(issues_to_csv(@issues, @project, @query, params), :type => 'text/csv; header=present', :filename => 'export.csv') }
@@ -100,8 +100,9 @@ class IssuesController < ApplicationController
   end
 
   def show
-    @journals = @issue.journals.find(:all, :include => [:user, :details], :order => "#{Journal.table_name}.created_on ASC")
+    @journals = @issue.journals.includes(:user, :details).reorder("#{Journal.table_name}.id ASC").all
     @journals.each_with_index {|j,i| j.indice = i+1}
+    @journals.reject!(&:private_notes?) unless User.current.allowed_to?(:view_private_notes, @issue.project)
     @journals.reverse! if User.current.wants_comments_in_reverse_order?
 
     @changesets = @issue.changesets.visible.all
@@ -119,7 +120,10 @@ class IssuesController < ApplicationController
       }
       format.api
       format.atom { render :template => 'journals/index', :layout => false, :content_type => 'application/atom+xml' }
-      format.pdf  { send_data(issue_to_pdf(@issue), :type => 'application/pdf', :filename => "#{@project.identifier}-#{@issue.id}.pdf") }
+      format.pdf  {
+        pdf = issue_to_pdf(@issue, :journals => @journals)
+        send_data(pdf, :type => 'application/pdf', :filename => "#{@project.identifier}-#{@issue.id}.pdf")
+      }
     end
   end
 
@@ -128,17 +132,7 @@ class IssuesController < ApplicationController
   def new
     respond_to do |format|
       format.html { render :action => 'new', :layout => !request.xhr? }
-      format.js {
-        render(:update) { |page|
-          if params[:project_change]
-            page.replace_html 'all_attributes', :partial => 'form'
-          else
-            page.replace_html 'attributes', :partial => 'attributes'
-          end
-          m = User.current.allowed_to?(:log_time, @issue.project) ? 'show' : 'hide'
-          page << "if ($('log_time')) {Element.#{m}('log_time');}"
-        }
-      }
+      format.js { render :partial => 'update_form' }
     end
   end
 
@@ -150,7 +144,7 @@ class IssuesController < ApplicationController
       respond_to do |format|
         format.html {
           render_attachment_warning_if_needed(@issue)
-          flash[:notice] = l(:notice_issue_successful_create, :id => "<a href='#{issue_path(@issue)}'>##{@issue.id}</a>")
+          flash[:notice] = l(:notice_issue_successful_create, :id => view_context.link_to("##{@issue.id}", issue_path(@issue), :title => @issue.subject))
           redirect_to(params[:continue] ?  { :action => 'new', :project_id => @issue.project, :issue => {:tracker_id => @issue.tracker, :parent_issue_id => @issue.parent_issue_id}.reject {|k,v| v.nil?} } :
                       { :action => 'show', :id => @issue })
         }
@@ -183,12 +177,8 @@ class IssuesController < ApplicationController
     rescue ActiveRecord::StaleObjectError
       @conflict = true
       if params[:last_journal_id]
-        if params[:last_journal_id].present?
-          last_journal_id = params[:last_journal_id].to_i
-          @conflict_journals = @issue.journals.all(:conditions => ["#{Journal.table_name}.id > ?", last_journal_id])
-        else
-          @conflict_journals = @issue.journals.all
-        end
+        @conflict_journals = @issue.journals_after(params[:last_journal_id]).all
+        @conflict_journals.reject!(&:private_notes?) unless User.current.allowed_to?(:view_private_notes, @issue.project)
       end
     end
 
@@ -198,7 +188,7 @@ class IssuesController < ApplicationController
 
       respond_to do |format|
         format.html { redirect_back_or_default({:action => 'show', :id => @issue}) }
-        format.api  { head :ok }
+        format.api  { render_api_ok }
       end
     else
       respond_to do |format|
@@ -225,12 +215,20 @@ class IssuesController < ApplicationController
     end
     target_projects ||= @projects
 
-    @available_statuses = @issues.map(&:new_statuses_allowed_to).reduce(:&)
+    if @copy
+      @available_statuses = [IssueStatus.default]
+    else
+      @available_statuses = @issues.map(&:new_statuses_allowed_to).reduce(:&)
+    end
     @custom_fields = target_projects.map{|p|p.all_issue_custom_fields}.reduce(:&)
     @assignables = target_projects.map(&:assignable_users).reduce(:&)
     @trackers = target_projects.map(&:trackers).reduce(:&)
     @versions = target_projects.map {|p| p.shared_versions.open}.reduce(:&)
     @categories = target_projects.map {|p| p.issue_categories}.reduce(:&)
+    if @copy
+      @attachments_present = @issues.detect {|i| i.attachments.any?}.present?
+      @subtasks_present = @issues.detect {|i| !i.leaf?}.present?
+    end
 
     @safe_attributes = @issues.map(&:safe_attribute_names).reduce(:&)
     render :layout => false if request.xhr?
@@ -243,10 +241,20 @@ class IssuesController < ApplicationController
 
     unsaved_issue_ids = []
     moved_issues = []
+
+    if @copy && params[:copy_subtasks].present?
+      # Descendant issues will be copied with the parent task
+      # Don't copy them twice
+      @issues.reject! {|issue| @issues.detect {|other| issue.is_descendant_of?(other)}}
+    end
+
     @issues.each do |issue|
       issue.reload
       if @copy
-        issue = issue.copy
+        issue = issue.copy({},
+          :attachments => params[:copy_attachments].present?,
+          :subtasks => params[:copy_subtasks].present?
+        )
       end
       journal = issue.init_journal(User.current, params[:notes])
       issue.safe_attributes = attributes
@@ -301,7 +309,7 @@ class IssuesController < ApplicationController
     end
     respond_to do |format|
       format.html { redirect_back_or_default(:action => 'index', :project_id => @project) }
-      format.api  { head :ok }
+      format.api  { render_api_ok }
     end
   end
 
@@ -348,14 +356,11 @@ private
   # from the params
   # TODO: Refactor, not everything in here is needed by #edit
   def update_issue_from_params
-    @allowed_statuses = @issue.new_statuses_allowed_to(User.current)
-    @priorities = IssuePriority.active
     @edit_allowed = User.current.allowed_to?(:edit_issues, @project)
     @time_entry = TimeEntry.new(:issue => @issue, :project => @issue.project)
     @time_entry.attributes = params[:time_entry]
 
-    @notes = params[:notes] || (params[:issue].present? ? params[:issue][:notes] : nil)
-    @issue.init_journal(User.current, @notes)
+    @issue.init_journal(User.current)
 
     issue_attributes = params[:issue]
     if issue_attributes && params[:conflict_resolution]
@@ -364,13 +369,15 @@ private
         issue_attributes = issue_attributes.dup
         issue_attributes.delete(:lock_version)
       when 'add_notes'
-        issue_attributes = {}
+        issue_attributes = issue_attributes.slice(:notes)
       when 'cancel'
         redirect_to issue_path(@issue)
         return false
       end
     end
     @issue.safe_attributes = issue_attributes
+    @priorities = IssuePriority.active
+    @allowed_statuses = @issue.new_statuses_allowed_to(User.current)
     true
   end
 
@@ -383,7 +390,8 @@ private
         begin
           @copy_from = Issue.visible.find(params[:copy_from])
           @copy_attachments = params[:copy_attachments].present? || request.get?
-          @issue.copy_from(@copy_from, :attachments => @copy_attachments)
+          @copy_subtasks = params[:copy_subtasks].present? || request.get?
+          @issue.copy_from(@copy_from, :attachments => @copy_attachments, :subtasks => @copy_subtasks)
         rescue ActiveRecord::RecordNotFound
           render_404
           return
@@ -395,7 +403,7 @@ private
     end
 
     @issue.project = @project
-    @issue.author = User.current
+    @issue.author ||= User.current
     # Tracker must be set before custom field values
     @issue.tracker ||= @project.trackers.find((params[:issue] && params[:issue][:tracker_id]) || params[:tracker_id] || :first)
     if @issue.tracker.nil?
@@ -420,7 +428,16 @@ private
   def parse_params_for_bulk_issue_attributes(params)
     attributes = (params[:issue] || {}).reject {|k,v| v.blank?}
     attributes.keys.each {|k| attributes[k] = '' if attributes[k] == 'none'}
-    attributes[:custom_field_values].reject! {|k,v| v.blank?} if attributes[:custom_field_values]
+    if custom = attributes[:custom_field_values]
+      custom.reject! {|k,v| v.blank?}
+      custom.keys.each do |k|
+        if custom[k].is_a?(Array)
+          custom[k] << '' if custom[k].delete('__none__')
+        else
+          custom[k] = '' if custom[k] == '__none__'
+        end
+      end
+    end
     attributes
   end
 end

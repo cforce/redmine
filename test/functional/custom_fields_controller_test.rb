@@ -1,5 +1,5 @@
 # Redmine - project management software
-# Copyright (C) 2006-2011  Jean-Philippe Lang
+# Copyright (C) 2006-2012  Jean-Philippe Lang
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -16,18 +16,11 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 require File.expand_path('../../test_helper', __FILE__)
-require 'custom_fields_controller'
-
-# Re-raise errors caught by the controller.
-class CustomFieldsController; def rescue_action(e) raise e end; end
 
 class CustomFieldsControllerTest < ActionController::TestCase
   fixtures :custom_fields, :custom_values, :trackers, :users
 
   def setup
-    @controller = CustomFieldsController.new
-    @request    = ActionController::TestRequest.new
-    @response   = ActionController::TestResponse.new
     @request.session[:user_id] = 1
   end
 
@@ -37,26 +30,40 @@ class CustomFieldsControllerTest < ActionController::TestCase
     assert_template 'index'
   end
 
+  def test_new
+    custom_field_classes.each do |klass|
+      get :new, :type => klass.name
+      assert_response :success
+      assert_template 'new'
+      assert_kind_of klass, assigns(:custom_field)
+      assert_select 'form#custom_field_form' do
+        assert_select 'select#custom_field_field_format[name=?]', 'custom_field[field_format]'
+        assert_select 'input[type=hidden][name=type][value=?]', klass.name
+      end
+    end
+  end
+
   def test_new_issue_custom_field
     get :new, :type => 'IssueCustomField'
     assert_response :success
     assert_template 'new'
-    assert_tag :input, :attributes => {:name => 'custom_field[name]'}
-    assert_tag :select,
-      :attributes => {:name => 'custom_field[field_format]'},
-      :child => {
-        :tag => 'option',
-        :attributes => {:value => 'user'},
-        :content => 'User'
-      }
-    assert_tag :select,
-      :attributes => {:name => 'custom_field[field_format]'},
-      :child => {
-        :tag => 'option',
-        :attributes => {:value => 'version'},
-        :content => 'Version'
-      }
-    assert_tag :input, :attributes => {:name => 'type', :value => 'IssueCustomField'}
+    assert_select 'form#custom_field_form' do
+      assert_select 'select#custom_field_field_format[name=?]', 'custom_field[field_format]' do
+        assert_select 'option[value=user]', :text => 'User'
+        assert_select 'option[value=version]', :text => 'Version'
+      end
+      assert_select 'input[type=hidden][name=type][value=IssueCustomField]'
+    end
+  end
+
+  def test_new_js
+    get :new, :type => 'IssueCustomField', :custom_field => {:field_format => 'list'}, :format => 'js'
+    assert_response :success
+    assert_template 'new'
+    assert_equal 'text/javascript', response.content_type
+
+    field = assigns(:custom_field)
+    assert_equal 'list', field.field_format
   end
 
   def test_new_with_invalid_custom_field_class_should_render_404
@@ -134,5 +141,12 @@ class CustomFieldsControllerTest < ActionController::TestCase
     assert_redirected_to '/custom_fields?tab=IssueCustomField'
     assert_nil CustomField.find_by_id(1)
     assert_nil CustomValue.find_by_custom_field_id(1)
+  end
+
+  def custom_field_classes
+    files = Dir.glob(File.join(Rails.root, 'app/models/*_custom_field.rb')).map {|f| File.basename(f).sub(/\.rb$/, '') }
+    classes = files.map(&:classify).map(&:constantize)
+    assert classes.size > 0
+    classes
   end
 end

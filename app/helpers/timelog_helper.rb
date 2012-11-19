@@ -1,7 +1,7 @@
 # encoding: utf-8
 #
 # Redmine - project management software
-# Copyright (C) 2006-2011  Jean-Philippe Lang
+# Copyright (C) 2006-2012  Jean-Philippe Lang
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -77,6 +77,7 @@ module TimelogHelper
                         [l(:label_yesterday), 'yesterday'],
                         [l(:label_this_week), 'current_week'],
                         [l(:label_last_week), 'last_week'],
+                        [l(:label_last_n_weeks, 2), 'last_2_weeks'],
                         [l(:label_last_n_days, 7), '7_days'],
                         [l(:label_this_month), 'current_month'],
                         [l(:label_last_month), 'last_month'],

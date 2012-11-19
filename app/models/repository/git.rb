@@ -87,16 +87,16 @@ class Repository::Git < Repository
   end
 
   def find_changeset_by_name(name)
-    return nil if name.nil? || name.empty?
-    e = changesets.find(:first, :conditions => ['revision = ?', name.to_s])
-    return e if e
-    changesets.find(:first, :conditions => ['scmid LIKE ?', "#{name}%"])
+    if name.present?
+      changesets.where(:revision => name.to_s).first ||
+        changesets.where('scmid LIKE ?', "#{name}%").first
+    end
   end
 
   def entries(path=nil, identifier=nil)
-    scm.entries(path,
-                identifier,
-                options = {:report_last_commit => extra_report_last_commit})
+    entries = scm.entries(path, identifier, :report_last_commit => extra_report_last_commit)
+    load_entries_changesets(entries)
+    entries
   end
 
   # With SCMs that have a sequential commit numbering,
@@ -107,8 +107,7 @@ class Repository::Git < Repository
   # However, Git does not have a sequential commit numbering.
   #
   # In order to fetch only new adding revisions,
-  # Redmine needs to parse revisions per branch.
-  # Branch "last_scmid" is for this requirement.
+  # Redmine needs to save "heads".
   #
   # In Git and Mercurial, revisions are not in date order.
   # Redmine Mercurial fixed issues.
@@ -131,9 +130,17 @@ class Repository::Git < Repository
   def fetch_changesets
     scm_brs = branches
     return if scm_brs.nil? || scm_brs.empty?
+
     h1 = extra_info || {}
     h  = h1.dup
-    h["branches"]       ||= {}
+    repo_heads = scm_brs.map{ |br| br.scmid }
+    h["heads"] ||= []
+    prev_db_heads = h["heads"].dup
+    if prev_db_heads.empty?
+      prev_db_heads += heads_from_branches_hash
+    end
+    return if prev_db_heads.sort == repo_heads.sort
+
     h["db_consistent"]  ||= {}
     if changesets.count == 0
       h["db_consistent"]["ordering"] = 1
@@ -144,99 +151,85 @@ class Repository::Git < Repository
       merge_extra_info(h)
       self.save
     end
-    save_revisions(h, scm_brs)
+    save_revisions(prev_db_heads, repo_heads)
   end
 
-  def save_revisions(h, scm_brs)
-    # Remember what revisions we already processed (in any branches)
-    all_revisions = []
-    scm_brs.each do |br1|
-      br = br1.to_s
-      last_revision = nil
-      from_scmid = nil
-      from_scmid = h["branches"][br]["last_scmid"] if h["branches"][br]
-      h["branches"][br] ||= {}
+  def save_revisions(prev_db_heads, repo_heads)
+    h = {}
+    opts = {}
+    opts[:reverse]  = true
+    opts[:excludes] = prev_db_heads
+    opts[:includes] = repo_heads
 
-      revisions = scm.revisions('', from_scmid, br, {:reverse => true})
-      next if revisions.blank?
+    revisions = scm.revisions('', nil, nil, opts)
+    return if revisions.blank?
 
-      # Remember the last commit id here, before we start removing revisions from the array.
-      # We'll do that for optimization, but it also means, that we may lose even all revisions.
-      last_revision  = revisions.last
-
-      # remove revisions that we have already processed (possibly in other branches)
-      revisions.reject!{|r| all_revisions.include?(r.scmid)}
-      # add revisions that we are to parse now to 'all processed revisions'
-      # (this equals to a union, because we executed diff above)
-      all_revisions += revisions.map{|r| r.scmid}
-
-      # Make the search for existing revisions in the database in a more sufficient manner
-      # This is replacing the one-after-one queries.
-      # Find all revisions, that are in the database, and then remove them from the revision array.
-      # Then later we won't need any conditions for db existence.
-      # Query for several revisions at once, and remove them from the revisions array, if they are there.
-      # Do this in chunks, to avoid eventual memory problems (in case of tens of thousands of commits).
-      # If there are no revisions (because the original code's algoritm filtered them),
-      # then this part will be stepped over.
-      # We make queries, just if there is any revision.
-      limit = 100
-      offset = 0
-      revisions_copy = revisions.clone # revisions will change
-      while offset < revisions_copy.size
-        recent_changesets_slice = changesets.find(
+    # Make the search for existing revisions in the database in a more sufficient manner
+    #
+    # Git branch is the reference to the specific revision.
+    # Git can *delete* remote branch and *re-push* branch.
+    #
+    #  $ git push remote :branch
+    #  $ git push remote branch
+    #
+    # After deleting branch, revisions remain in repository until "git gc".
+    # On git 1.7.2.3, default pruning date is 2 weeks.
+    # So, "git log --not deleted_branch_head_revision" return code is 0.
+    #
+    # After re-pushing branch, "git log" returns revisions which are saved in database.
+    # So, Redmine needs to scan revisions and database every time.
+    #
+    # This is replacing the one-after-one queries.
+    # Find all revisions, that are in the database, and then remove them from the revision array.
+    # Then later we won't need any conditions for db existence.
+    # Query for several revisions at once, and remove them from the revisions array, if they are there.
+    # Do this in chunks, to avoid eventual memory problems (in case of tens of thousands of commits).
+    # If there are no revisions (because the original code's algorithm filtered them),
+    # then this part will be stepped over.
+    # We make queries, just if there is any revision.
+    limit = 100
+    offset = 0
+    revisions_copy = revisions.clone # revisions will change
+    while offset < revisions_copy.size
+      recent_changesets_slice = changesets.find(
                                      :all,
                                      :conditions => [
                                         'scmid IN (?)',
                                         revisions_copy.slice(offset, limit).map{|x| x.scmid}
                                       ]
                                     )
-        # Subtract revisions that redmine already knows about
-        recent_revisions = recent_changesets_slice.map{|c| c.scmid}
-        revisions.reject!{|r| recent_revisions.include?(r.scmid)}
-        offset += limit
-      end
+      # Subtract revisions that redmine already knows about
+      recent_revisions = recent_changesets_slice.map{|c| c.scmid}
+      revisions.reject!{|r| recent_revisions.include?(r.scmid)}
+      offset += limit
+    end
 
-      revisions.each do |rev|
-        transaction do
-          # There is no search in the db for this revision, because above we ensured,
-          # that it's not in the db.
-          db_saved_rev = save_revision(rev)
-          parents = {}
-          parents[db_saved_rev] = rev.parents unless rev.parents.nil?
-          parents.each do |ch, chparents|
-            ch.parents = chparents.collect{|rp| find_changeset_by_name(rp)}.compact
-          end
-          # saving the last scmid was moved from here, because we won't come in here,
-          # if the revision was already added for another branch
-        end
-      end
-
-      # save the data about the last revision for this branch
-      unless last_revision.nil?
-        h["branches"][br]["last_scmid"] = last_revision.scmid
-        merge_extra_info(h)
-        self.save
+    revisions.each do |rev|
+      transaction do
+        # There is no search in the db for this revision, because above we ensured,
+        # that it's not in the db.
+        save_revision(rev)
       end
     end
+    h["heads"] = repo_heads.dup
+    merge_extra_info(h)
+    self.save
   end
   private :save_revisions
 
   def save_revision(rev)
-    changeset = Changeset.new(
+    parents = (rev.parents || []).collect{|rp| find_changeset_by_name(rp)}.compact
+    changeset = Changeset.create(
               :repository   => self,
               :revision     => rev.identifier,
               :scmid        => rev.scmid,
               :committer    => rev.author,
               :committed_on => rev.time,
-              :comments     => rev.message
+              :comments     => rev.message,
+              :parents      => parents
               )
-    if changeset.save
-      rev.paths.each do |file|
-        Change.create(
-                  :changeset => changeset,
-                  :action    => file[:action],
-                  :path      => file[:path])
-      end
+    unless changeset.new_record?
+      rev.paths.each { |change| changeset.create_change(change) }
     end
     changeset
   end

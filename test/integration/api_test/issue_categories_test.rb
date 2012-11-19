@@ -1,5 +1,5 @@
 # Redmine - project management software
-# Copyright (C) 2006-2011  Jean-Philippe Lang
+# Copyright (C) 2006-2012  Jean-Philippe Lang
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -81,6 +81,7 @@ class ApiTest::IssueCategoriesTest < ActionController::IntegrationTest
           put '/issue_categories/2.xml', {:issue_category => {:name => 'API Update'}}, credentials('jsmith')
         end
         assert_response :ok
+        assert_equal '', @response.body
         assert_equal 'API Update', IssueCategory.find(2).name
       end
     end
@@ -104,6 +105,7 @@ class ApiTest::IssueCategoriesTest < ActionController::IntegrationTest
         delete '/issue_categories/1.xml', {}, credentials('jsmith')
       end
       assert_response :ok
+      assert_equal '', @response.body
       assert_nil IssueCategory.find_by_id(1)
     end
     
@@ -117,6 +119,7 @@ class ApiTest::IssueCategoriesTest < ActionController::IntegrationTest
         end
       end
       assert_response :ok
+      assert_equal '', @response.body
       assert_nil IssueCategory.find_by_id(1)
     end
   end
