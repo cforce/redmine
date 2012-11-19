@@ -1,7 +1,6 @@
 <%= call_hook :view_account_login_top %>
 <div id="login-form">
 <%= form_tag(signin_path) do %>
-<h1>Willkommen beim Produktkonfigurationsmanagment der Sparte Systemhaus im DSV</h1>
 <%= back_url_hidden_field_tag %>
 <table>
 <tr>
@@ -39,33 +38,5 @@
 </table>
 <%= javascript_tag "$('#username').focus();" %>
 <% end %>
-</div>
-<div id="login-info">
-<h3>Probleme beim Login?</h3>
-Als <span>Login bzw. Authentifizierungszugang</span> verwenden Sie bitte ihre DSV LDAP (z.B. Intranet Zugang) Zugangsdaten welche ihnen das CustomerCareCenter ausgestellt hat. Falls Sie das Passwort nicht mehr wissen, k&ouml;nnen Sie zur Wiederherstellung wie folgt vorgehen:<br />
-<ol>
-<li> Rufen Sie die Anwendung zur Verwaltung ihres Accounts auf.</li>
-<ul>
-<li> F&uuml;r Citrix-Nutzer gibt es eine <a href="/pw-sid2.html">Citrix-Ver&ouml;ffentlichung</a> zur Verwaltung ihres Accounts.</li>
-<li> DSV Mitarbeiter und &uuml;ber VPN angebundene Partner k&ouml;nnen ihren Account in der <a href="https://dsveguide.dsv-gruppe.de/eGuide/servlet/eGuide?UseCookie=false" target="_BLANK">DSV E-Guide Anwendung</a> verwalten.</li>
-</ul>
-</li>
-<li> Benutzername (UserId) und Passwort eintragen (dieser Teil evtl. kann auch automatisch erfolgen).</li>
-<li> Anmelden klicken.</li>
-<li> Informationen bearbeiten klicken.</li>
-<li> Passwort &auml;ndern klicken.</li>
-<li> Aktuelles Passwort und zweimal das neue Passwort eingeben.</li>
-<li> &Auml;ndern klicken und nach der Erfolgsmeldung Abmeldung klicken.</li>
-</ol>
-<span>Achtung:</span> Bitte nur das Passwort &auml;ndern, sonstige Daten m&uuml;ssen unver&auml;ndert bleiben!<br />
-Falls der Ablauf wie oben beschrieben nicht m&ouml;glich ist, wenden Sie sich zur Wiederherstellung Ihres Novell Passworts an das Customer Care Center unter der Durchwahl -2020. (Externe +49 711 782-2020)<br />
-<br />
-<br />
-Diese Seite ist zur <span>Absicherung mit einem Self-Signed SSL Zertifikat</span> gesch&uuml;tzt, welches vom "Deutscher Sparkassenverlag" signiert ist. Das Zertifikat sowie allen anderen verwendeten Zertifikate im Bereich der Entwicklungsinfratsuktur leiten von der gemeinsamen 
-<a href="https://infomine.dsv-gruppe.de/DSVERLAG-CA.cer">DSV-Root CA</a> ab. Diese <a href="https://infomine.dsv-gruppe.de/DSVERLAG-CA.cer">DSV-Root CA</a> muss als Zertifikat in den Zertifikatsspeicher 
-"Vertrauensw&uuml;rdige Stammzertifizierungsstellen" importiert werden, damit die Verwendung der Web-Services und der Web-Browser reibungslos funktioniert.
-<br />
-<br />
-Falls Sie weitere Unterst&uuml;tzung brauchen, wenden Sie sich bitte via Mail an <a href="mailto:infomine-admin@dsv-gruppe.de">infomine-admin@dsv-gruppe.de</a>.
 </div>
 <%= call_hook :view_account_login_bottom %>

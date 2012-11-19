@@ -61,6 +61,8 @@ module ObjectHelpers
 
   def Issue.generate!(attributes={})
     issue = Issue.new(attributes)
+    issue.project ||= Project.find(1)
+    issue.tracker ||= issue.project.trackers.first
     issue.subject = 'Generated' if issue.subject.blank?
     issue.author ||= User.find(2)
     yield issue if block_given?
@@ -88,15 +90,6 @@ module ObjectHelpers
     Issue.generate_for_project!(project, :subject => 'Child2', :parent_issue_id => issue.id)
     Issue.generate_for_project!(project, :subject => 'Child11', :parent_issue_id => child.id)
     issue.reload
-  end
-
-  def Journal.generate!(attributes={})
-    journal = Journal.new(attributes)
-    journal.user ||= User.first
-    journal.journalized ||= Issue.first
-    yield journal if block_given?
-    journal.save!
-    journal
   end
 
   def Version.generate!(attributes={})

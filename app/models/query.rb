@@ -38,7 +38,7 @@ class QueryColumn
   def sortable?
     !@sortable.nil?
   end
-
+  
   def sortable
     @sortable.is_a?(Proc) ? @sortable.call : @sortable
   end
@@ -71,7 +71,7 @@ class QueryCustomFieldColumn < QueryColumn
 
   def value(issue)
     cv = issue.custom_values.select {|v| v.custom_field_id == @cf.id}.collect {|v| @cf.cast_value(v.value)}
-    cv.size > 1 ? cv.sort {|a,b| a.to_s <=> b.to_s} : cv.first
+    cv.size > 1 ? cv : cv.first
   end
 
   def css_classes
@@ -100,7 +100,7 @@ class Query < ActiveRecord::Base
                   "o"   => :label_open_issues,
                   "c"   => :label_closed_issues,
                   "!*"  => :label_none,
-                  "*"   => :label_any,
+                  "*"   => :label_all,
                   ">="  => :label_greater_or_equal,
                   "<="  => :label_less_or_equal,
                   "><"  => :label_between,
@@ -113,10 +113,7 @@ class Query < ActiveRecord::Base
                   "<t-" => :label_more_than_ago,
                   "t-"  => :label_ago,
                   "~"   => :label_contains,
-                  "!~"  => :label_not_contains,
-                  "=p"  => :label_any_issues_in_project,
-                  "=!p" => :label_any_issues_not_in_project,
-                  "!p"  => :label_no_issues_in_project}
+                  "!~"  => :label_not_contains }
 
   cattr_reader :operators
 
@@ -129,8 +126,7 @@ class Query < ActiveRecord::Base
                                  :string => [ "=", "~", "!", "!~", "!*", "*" ],
                                  :text => [  "~", "!~", "!*", "*" ],
                                  :integer => [ "=", ">=", "<=", "><", "!*", "*" ],
-                                 :float => [ "=", ">=", "<=", "><", "!*", "*" ],
-                                 :relation => ["=", "=p", "=!p", "!p", "!*", "*"]}
+                                 :float => [ "=", ">=", "<=", "><", "!*", "*" ] }
 
   cattr_reader :operators_by_filter_type
 
@@ -151,7 +147,6 @@ class Query < ActiveRecord::Base
     QueryColumn.new(:estimated_hours, :sortable => "#{Issue.table_name}.estimated_hours"),
     QueryColumn.new(:done_ratio, :sortable => "#{Issue.table_name}.done_ratio", :groupable => true),
     QueryColumn.new(:created_on, :sortable => "#{Issue.table_name}.created_on", :default_order => 'desc'),
-    QueryColumn.new(:relations, :caption => :label_related_issues)
   ]
   cattr_reader :available_columns
 
@@ -226,57 +221,44 @@ class Query < ActiveRecord::Base
 
   def available_filters
     return @available_filters if @available_filters
-    @available_filters = {
-      "status_id" => {
-        :type => :list_status, :order => 0,
-        :values => IssueStatus.find(:all, :order => 'position').collect{|s| [s.name, s.id.to_s] }
-       },
-      "tracker_id" => {
-        :type => :list, :order => 2, :values => trackers.collect{|s| [s.name, s.id.to_s] }
-       },
-      "priority_id" => {
-        :type => :list, :order => 3, :values => IssuePriority.all.collect{|s| [s.name, s.id.to_s] }
-       },
-      "subject" => { :type => :text, :order => 8 },
-      "created_on" => { :type => :date_past, :order => 9 },
-      "updated_on" => { :type => :date_past, :order => 10 },
-      "start_date" => { :type => :date, :order => 11 },
-      "due_date" => { :type => :date, :order => 12 },
-      "estimated_hours" => { :type => :float, :order => 13 },
-      "done_ratio" =>  { :type => :integer, :order => 14 }
-    }
-    IssueRelation::TYPES.each do |relation_type, options|
-      @available_filters[relation_type] = {
-        :type => :relation, :order => @available_filters.size + 100,
-        :label => options[:name]
-      }
-    end
+
+    @available_filters = { "status_id" => { :type => :list_status, :order => 1, :values => IssueStatus.find(:all, :order => 'position').collect{|s| [s.name, s.id.to_s] } },
+                           "tracker_id" => { :type => :list, :order => 2, :values => trackers.collect{|s| [s.name, s.id.to_s] } },
+                           "priority_id" => { :type => :list, :order => 3, :values => IssuePriority.all.collect{|s| [s.name, s.id.to_s] } },
+                           "subject" => { :type => :text, :order => 8 },
+                           "created_on" => { :type => :date_past, :order => 9 },
+                           "updated_on" => { :type => :date_past, :order => 10 },
+                           "start_date" => { :type => :date, :order => 11 },
+                           "due_date" => { :type => :date, :order => 12 },
+                           "estimated_hours" => { :type => :float, :order => 13 },
+                           "done_ratio" =>  { :type => :integer, :order => 14 }}
+
     principals = []
     if project
       principals += project.principals.sort
       unless project.leaf?
         subprojects = project.descendants.visible.all
         if subprojects.any?
-          @available_filters["subproject_id"] = {
-            :type => :list_subprojects, :order => 13,
-            :values => subprojects.collect{|s| [s.name, s.id.to_s] }
-          }
+          @available_filters["subproject_id"] = { :type => :list_subprojects, :order => 13, :values => subprojects.collect{|s| [s.name, s.id.to_s] } }
           principals += Principal.member_of(subprojects)
         end
       end
     else
+      all_projects = Project.visible.all
       if all_projects.any?
         # members of visible projects
         principals += Principal.member_of(all_projects)
+
         # project filter
         project_values = []
         if User.current.logged? && User.current.memberships.any?
           project_values << ["<< #{l(:label_my_projects).downcase} >>", "mine"]
         end
-        project_values += all_projects_values
-        @available_filters["project_id"] = {
-          :type => :list, :order => 1, :values => project_values
-        } unless project_values.empty?
+        Project.project_tree(all_projects) do |p, level|
+          prefix = (level > 0 ? ('--' * level + ' ') : '')
+          project_values << ["#{prefix}#{p.name}", p.id.to_s]
+        end
+        @available_filters["project_id"] = { :type => :list, :order => 1, :values => project_values} unless project_values.empty?
       end
     end
     principals.uniq!
@@ -285,109 +267,69 @@ class Query < ActiveRecord::Base
 
     assigned_to_values = []
     assigned_to_values << ["<< #{l(:label_me)} >>", "me"] if User.current.logged?
-    assigned_to_values += (Setting.issue_group_assignment? ?
-                              principals : users).collect{|s| [s.name, s.id.to_s] }
-    @available_filters["assigned_to_id"] = {
-      :type => :list_optional, :order => 4, :values => assigned_to_values
-    } unless assigned_to_values.empty?
+    assigned_to_values += (Setting.issue_group_assignment? ? principals : users).collect{|s| [s.name, s.id.to_s] }
+    @available_filters["assigned_to_id"] = { :type => :list_optional, :order => 4, :values => assigned_to_values } unless assigned_to_values.empty?
 
     author_values = []
     author_values << ["<< #{l(:label_me)} >>", "me"] if User.current.logged?
     author_values += users.collect{|s| [s.name, s.id.to_s] }
-    @available_filters["author_id"] = {
-      :type => :list, :order => 5, :values => author_values
-    } unless author_values.empty?
+    @available_filters["author_id"] = { :type => :list, :order => 5, :values => author_values } unless author_values.empty?
 
     group_values = Group.all.collect {|g| [g.name, g.id.to_s] }
-    @available_filters["member_of_group"] = {
-      :type => :list_optional, :order => 6, :values => group_values
-    } unless group_values.empty?
+    @available_filters["member_of_group"] = { :type => :list_optional, :order => 6, :values => group_values } unless group_values.empty?
 
     role_values = Role.givable.collect {|r| [r.name, r.id.to_s] }
-    @available_filters["assigned_to_role"] = {
-      :type => :list_optional, :order => 7, :values => role_values
-    } unless role_values.empty?
+    @available_filters["assigned_to_role"] = { :type => :list_optional, :order => 7, :values => role_values } unless role_values.empty?
 
     if User.current.logged?
-      @available_filters["watcher_id"] = {
-        :type => :list, :order => 15, :values => [["<< #{l(:label_me)} >>", "me"]]
-      }
+      @available_filters["watcher_id"] = { :type => :list, :order => 15, :values => [["<< #{l(:label_me)} >>", "me"]] }
     end
 
     if project
       # project specific filters
       categories = project.issue_categories.all
       unless categories.empty?
-        @available_filters["category_id"] = {
-          :type => :list_optional, :order => 6,
-          :values => categories.collect{|s| [s.name, s.id.to_s] }
-        }
+        @available_filters["category_id"] = { :type => :list_optional, :order => 6, :values => categories.collect{|s| [s.name, s.id.to_s] } }
       end
       versions = project.shared_versions.all
       unless versions.empty?
-        @available_filters["fixed_version_id"] = {
-          :type => :list_optional, :order => 7,
-          :values => versions.sort.collect{|s| ["#{s.project.name} - #{s.name}", s.id.to_s] }
-        }
+        @available_filters["fixed_version_id"] = { :type => :list_optional, :order => 7, :values => versions.sort.collect{|s| ["#{s.project.name} - #{s.name}", s.id.to_s] } }
       end
       add_custom_fields_filters(project.all_issue_custom_fields)
     else
       # global filters for cross project issue list
       system_shared_versions = Version.visible.find_all_by_sharing('system')
       unless system_shared_versions.empty?
-        @available_filters["fixed_version_id"] = {
-          :type => :list_optional, :order => 7,
-          :values => system_shared_versions.sort.collect{|s|
-                                       ["#{s.project.name} - #{s.name}", s.id.to_s]
-                                     }
-        }
+        @available_filters["fixed_version_id"] = { :type => :list_optional, :order => 7, :values => system_shared_versions.sort.collect{|s| ["#{s.project.name} - #{s.name}", s.id.to_s] } }
       end
-      add_custom_fields_filters(
-                   IssueCustomField.find(:all,
-                                         :conditions => {
-                                            :is_filter => true,
-                                            :is_for_all => true
-                                         }))
+      add_custom_fields_filters(IssueCustomField.find(:all, :conditions => {:is_filter => true, :is_for_all => true}))
     end
+
     add_associations_custom_fields_filters :project, :author, :assigned_to, :fixed_version
+
     if User.current.allowed_to?(:set_issues_private, nil, :global => true) ||
       User.current.allowed_to?(:set_own_issues_private, nil, :global => true)
-      @available_filters["is_private"] = {
-        :type => :list, :order => 16,
-        :values => [[l(:general_text_yes), "1"], [l(:general_text_no), "0"]]
-      }
+      @available_filters["is_private"] = { :type => :list, :order => 15, :values => [[l(:general_text_yes), "1"], [l(:general_text_no), "0"]] }
     end
+
     Tracker.disabled_core_fields(trackers).each {|field|
       @available_filters.delete field
     }
+
     @available_filters.each do |field, options|
-      options[:name] ||= l(options[:label] || "field_#{field}".gsub(/_id$/, ''))
+      options[:name] ||= l("field_#{field}".gsub(/_id$/, ''))
     end
+
     @available_filters
   end
 
-  # Returns a representation of the available filters for JSON serialization
+	# Returns a representation of the available filters for JSON serialization
   def available_filters_as_json
     json = {}
     available_filters.each do |field, options|
       json[field] = options.slice(:type, :name, :values).stringify_keys
     end
     json
-  end
-
-  def all_projects
-    @all_projects ||= Project.visible.all
-  end
-
-  def all_projects_values
-    return @all_projects_values if @all_projects_values
-
-    values = []
-    Project.project_tree(all_projects) do |p, level|
-      prefix = (level > 0 ? ('--' * level + ' ') : '')
-      values << ["#{prefix}#{p.name}", p.id.to_s]
-    end
-    @all_projects_values = values
   end
 
   def add_filter(field, operator, values)
@@ -693,9 +635,6 @@ class Query < ActiveRecord::Base
     if has_column?(:spent_hours)
       Issue.load_visible_spent_hours(issues)
     end
-    if has_column?(:relations)
-      Issue.load_visible_relations(issues)
-    end
     issues
   rescue ::ActiveRecord::StatementInvalid => e
     raise StatementInvalid.new(e.message)
@@ -772,10 +711,10 @@ class Query < ActiveRecord::Base
       "(#{nl} #{Issue.table_name}.assigned_to_id #{sw} IN (SELECT DISTINCT #{Member.table_name}.user_id FROM #{Member.table_name}" +
         " WHERE #{Member.table_name}.project_id = #{Issue.table_name}.project_id))"
     when "=", "!"
-      role_cond = value.any? ?
+      role_cond = value.any? ? 
         "#{MemberRole.table_name}.role_id IN (" + value.collect{|val| "'#{connection.quote_string(val)}'"}.join(",") + ")" :
         "1=0"
-
+      
       sw = operator == "!" ? 'NOT' : ''
       nl = operator == "!" ? "#{Issue.table_name}.assigned_to_id IS NULL OR" : ''
       "(#{nl} #{Issue.table_name}.assigned_to_id #{sw} IN (SELECT DISTINCT #{Member.table_name}.user_id FROM #{Member.table_name}, #{MemberRole.table_name}" +
@@ -788,42 +727,6 @@ class Query < ActiveRecord::Base
     va = value.map {|v| v == '0' ? connection.quoted_false : connection.quoted_true}.uniq.join(',')
 
     "#{Issue.table_name}.is_private #{op} (#{va})"
-  end
-
-  def sql_for_relations(field, operator, value, options={})
-    relation_options = IssueRelation::TYPES[field]
-    return relation_options unless relation_options
-
-    relation_type = field
-    join_column, target_join_column = "issue_from_id", "issue_to_id"
-    if relation_options[:reverse] || options[:reverse]
-      relation_type = relation_options[:reverse] || relation_type
-      join_column, target_join_column = target_join_column, join_column
-    end
-
-    sql = case operator
-      when "*", "!*"
-        op = (operator == "*" ? 'IN' : 'NOT IN')
-        "#{Issue.table_name}.id #{op} (SELECT DISTINCT #{IssueRelation.table_name}.#{join_column} FROM #{IssueRelation.table_name} WHERE #{IssueRelation.table_name}.relation_type = '#{connection.quote_string(relation_type)}')"
-      when "=", "!"
-        op = (operator == "=" ? 'IN' : 'NOT IN')
-        "#{Issue.table_name}.id #{op} (SELECT DISTINCT #{IssueRelation.table_name}.#{join_column} FROM #{IssueRelation.table_name} WHERE #{IssueRelation.table_name}.relation_type = '#{connection.quote_string(relation_type)}' AND #{IssueRelation.table_name}.#{target_join_column} = #{value.first.to_i})"
-      when "=p", "=!p", "!p"
-        op = (operator == "!p" ? 'NOT IN' : 'IN')
-        comp = (operator == "=!p" ? '<>' : '=')
-        "#{Issue.table_name}.id #{op} (SELECT DISTINCT #{IssueRelation.table_name}.#{join_column} FROM #{IssueRelation.table_name}, #{Issue.table_name} relissues WHERE #{IssueRelation.table_name}.relation_type = '#{connection.quote_string(relation_type)}' AND #{IssueRelation.table_name}.#{target_join_column} = relissues.id AND relissues.project_id #{comp} #{value.first.to_i})"
-      end
-
-    if relation_options[:sym] == field && !options[:reverse]
-      sqls = [sql, sql_for_relations(field, operator, value, :reverse => true)]
-      sqls.join(["!", "!*", "!p"].include?(operator) ? " AND " : " OR ")
-    else
-      sql
-    end
-  end
-
-  IssueRelation::TYPES.keys.each do |relation_type|
-    alias_method "sql_for_#{relation_type}_field".to_sym, :sql_for_relations
   end
 
   private
@@ -995,11 +898,7 @@ class Query < ActiveRecord::Base
         filter_id = "#{assoc}.#{filter_id}"
         filter_name = l("label_attribute_of_#{assoc}", :name => filter_name)
       end
-      @available_filters[filter_id] = options.merge({
-               :name => filter_name,
-               :format => field.field_format,
-               :field => field
-             })
+      @available_filters[filter_id] = options.merge({ :name => filter_name, :format => field.field_format })
     end
   end
 

@@ -382,6 +382,28 @@ class MailHandlerTest < ActiveSupport::TestCase
     assert_equal 'Testmail from Webmail: ä ö ü...', issue.subject
   end
 
+  def test_add_issue_with_japanese_subject
+    issue = submit_email(
+              'subject_japanese_1.eml',
+              :issue => {:project => 'ecookbook'}
+            )
+    assert_kind_of Issue, issue
+    ja = "\xe3\x83\x86\xe3\x82\xb9\xe3\x83\x88"
+    ja.force_encoding('UTF-8') if ja.respond_to?(:force_encoding)
+    assert_equal ja, issue.subject
+  end
+
+  def test_add_issue_with_mixed_japanese_subject
+    issue = submit_email(
+              'subject_japanese_2.eml',
+              :issue => {:project => 'ecookbook'}
+            )
+    assert_kind_of Issue, issue
+    ja = "Re: \xe3\x83\x86\xe3\x82\xb9\xe3\x83\x88"
+    ja.force_encoding('UTF-8') if ja.respond_to?(:force_encoding)
+    assert_equal ja, issue.subject
+  end
+
   def test_should_ignore_emails_from_locked_users
     User.find(2).lock!
 
@@ -435,7 +457,6 @@ class MailHandlerTest < ActiveSupport::TestCase
     assert_equal User.find_by_login('jsmith'), journal.user
     assert_equal Issue.find(2), journal.journalized
     assert_match /This is reply/, journal.notes
-    assert_equal false, journal.private_notes
     assert_equal 'Feature request', journal.issue.tracker.name
   end
 
@@ -495,20 +516,6 @@ class MailHandlerTest < ActiveSupport::TestCase
     assert_match /This is reply/, journal.notes
     assert_equal 'Feature request', journal.issue.tracker.name
     assert_equal 'Normal', journal.issue.priority.name
-  end
-
-  def test_replying_to_a_private_note_should_add_reply_as_private
-    private_journal = Journal.create!(:notes => 'Private notes', :journalized => Issue.find(1), :private_notes => true, :user_id => 2)
-
-    assert_difference 'Journal.count' do
-      journal = submit_email('ticket_reply.eml') do |email|
-        email.sub! %r{^In-Reply-To:.*$}, "In-Reply-To: <redmine.journal-#{private_journal.id}.20060719210421@osiris>"
-      end
-
-      assert_kind_of Journal, journal
-      assert_match /This is reply/, journal.notes
-      assert_equal true, journal.private_notes
-    end
   end
 
   def test_reply_to_a_message

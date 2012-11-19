@@ -844,7 +844,7 @@ de:
   button_show: Anzeigen
 
   status_active: aktiv
-  status_registered: angemeldet
+  status_registered: nicht aktivierte
   status_locked: gesperrt
 
   version_status_open: offen
@@ -1017,8 +1017,8 @@ de:
   description_date_from: Startdatum eintragen
   description_date_to: Enddatum eintragen
 
-  label_parent_revision: Parent
-  label_child_revision: Child
+  label_parent_revision: Vorgänger
+  label_child_revision: Nachfolger
   error_scm_annotate_big_text_file: Der Eintrag kann nicht umgesetzt werden, da er die maximale Textlänge überschreitet.
   setting_default_issue_start_date_to_creation_date: Aktuelles Datum als Beginn für neue Tickets verwenden
   button_edit_section: Diesen Bereich bearbeiten
@@ -1068,23 +1068,14 @@ de:
   field_timeout: Auszeit (in Sekunden)
   setting_thumbnails_enabled: Vorschaubilder von Dateianhängen anzeigen
   setting_thumbnails_size: Größe der Vorschaubilder (in Pixel)
-  label_status_transitions: Status transitions
-  label_fields_permissions: Fields permissions
+  label_status_transitions: Statusänderungen
+  label_fields_permissions: Feldberechtigungen
   label_readonly: Nur-Lese-Zugriff
   label_required: Erforderlich
   text_repository_identifier_info: 'Kleinbuchstaben (a-z), Ziffern, Binde- und Unterstriche erlaubt.<br />Einmal gespeichert, kann die Kennung nicht mehr geändert werden.'
-  field_board_parent: Parent forum
-  label_attribute_of_project: Project's %{name}
-  label_attribute_of_author: Author's %{name}
-  label_attribute_of_assigned_to: Assignee's %{name}
-  label_attribute_of_fixed_version: Target version's %{name}
-  label_copy_subtasks: Copy subtasks
-  label_copied_to: copied to
-  label_copied_from: copied from
-  label_any_issues_in_project: any issues in project
-  label_any_issues_not_in_project: any issues not in project
-  field_private_notes: Private notes
-  permission_view_private_notes: View private notes
-  permission_set_notes_private: Set notes as private
-  label_no_issues_in_project: no issues in project
-  label_any: alle
+  field_board_parent: Übergeordnetes Forum
+  label_attribute_of_project: "%{name} des Projekts"
+  label_attribute_of_author: "%{name} des Autors"
+  label_attribute_of_assigned_to: "%{name} des Bearbeiters"
+  label_attribute_of_fixed_version: "%{name} der Zielversion"
+  label_copy_subtasks: Unteraufgaben kopieren

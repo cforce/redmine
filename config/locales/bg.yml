@@ -332,7 +332,6 @@ bg:
   field_core_fields: Стандартни полета
   field_timeout: Таймаут (в секунди)
   field_board_parent: Родителски форум
-  field_private_notes: Лични бележки
 
   setting_app_title: Заглавие
   setting_app_subtitle: Описание
@@ -418,8 +417,6 @@ bg:
   permission_add_issue_notes: Добавяне на бележки
   permission_edit_issue_notes: Редактиране на бележки
   permission_edit_own_issue_notes: Редактиране на собствени бележки
-  permission_view_private_notes: Разглеждане на лични бележки
-  permission_set_notes_private: Установяване на бележките лични
   permission_move_issues: Преместване на задачи
   permission_delete_issues: Изтриване на задачи
   permission_manage_public_queries: Управление на публичните заявки
@@ -620,7 +617,6 @@ bg:
   label_current_status: Текущо състояние
   label_new_statuses_allowed: Позволени състояния
   label_all: всички
-  label_any: която и да е
   label_none: никакви
   label_nobody: никой
   label_next: Следващ
@@ -674,9 +670,6 @@ bg:
   label_ago: преди
   label_contains: съдържа
   label_not_contains: не съдържа
-  label_any_issues_in_project: задачи от проект
-  label_any_issues_not_in_project: задачи, които не са в проект
-  label_no_issues_in_project: никакви задачи в проект
   label_day_plural: дни
   label_repository: Хранилище
   label_repository_new: Ново хранилище
@@ -752,8 +745,6 @@ bg:
   label_blocked_by: блокирана от
   label_precedes: предшества
   label_follows: изпълнява се след
-  label_copied_to: копирана в
-  label_copied_from: копирана от
   label_end_to_start: край към начало
   label_end_to_end: край към край
   label_start_to_start: начало към начало

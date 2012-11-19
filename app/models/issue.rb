@@ -28,14 +28,6 @@ class Issue < ActiveRecord::Base
   belongs_to :category, :class_name => 'IssueCategory', :foreign_key => 'category_id'
 
   has_many :journals, :as => :journalized, :dependent => :destroy
-  has_many :visible_journals,
-    :class_name => 'Journal',
-    :as => :journalized,
-    :conditions => Proc.new { 
-      ["(#{Journal.table_name}.private_notes = ? OR (#{Project.allowed_to_condition(User.current, :view_private_notes)}))", false]
-    },
-    :readonly => true
-
   has_many :time_entries, :dependent => :delete_all
   has_and_belongs_to_many :changesets, :order => "#{Changeset.table_name}.committed_on ASC, #{Changeset.table_name}.id ASC"
 
@@ -47,7 +39,7 @@ class Issue < ActiveRecord::Base
   acts_as_customizable
   acts_as_watchable
   acts_as_searchable :columns => ['subject', "#{table_name}.description", "#{Journal.table_name}.notes"],
-                     :include => [:project, :visible_journals],
+                     :include => [:project, :journals],
                      # sort by id so that limited eager loading doesn't break with postgresql
                      :order_column => "#{table_name}.id"
   acts_as_event :title => Proc.new {|o| "#{o.tracker.name} ##{o.id} (#{o.status}): #{o.subject}"},
@@ -60,7 +52,6 @@ class Issue < ActiveRecord::Base
   DONE_RATIO_OPTIONS = %w(issue_field issue_status)
 
   attr_reader :current_journal
-  delegate :notes, :notes=, :private_notes, :private_notes=, :to => :current_journal, :allow_nil => true
 
   validates_presence_of :subject, :priority, :project, :tracker, :author, :status
 
@@ -344,7 +335,6 @@ class Issue < ActiveRecord::Base
     'custom_field_values',
     'custom_fields',
     'lock_version',
-    'notes',
     :if => lambda {|issue, user| issue.new_record? || user.allowed_to?(:edit_issues, issue.project) }
 
   safe_attributes 'status_id',
@@ -352,14 +342,7 @@ class Issue < ActiveRecord::Base
     'fixed_version_id',
     'done_ratio',
     'lock_version',
-    'notes',
     :if => lambda {|issue, user| issue.new_statuses_allowed_to(user).any? }
-
-  safe_attributes 'notes',
-    :if => lambda {|issue, user| user.allowed_to?(:add_issue_notes, issue.project)}
-
-  safe_attributes 'private_notes',
-    :if => lambda {|issue, user| !issue.new_record? && user.allowed_to?(:set_notes_private, issue.project)} 
 
   safe_attributes 'watcher_user_ids',
     :if => lambda {|issue, user| issue.new_record? && user.allowed_to?(:add_issue_watchers, issue.project)} 
@@ -732,8 +715,8 @@ class Issue < ActiveRecord::Base
     end
   end
 
-  # Returns the users that should be notified
-  def notified_users
+  # Returns the mail adresses of users that should be notified
+  def recipients
     notified = []
     # Author and assignee are always notified unless they have been
     # locked or don't want to be notified
@@ -750,12 +733,7 @@ class Issue < ActiveRecord::Base
     notified.uniq!
     # Remove users that can not view the issue
     notified.reject! {|user| !visible?(user)}
-    notified
-  end
-
-  # Returns the email addresses that should be notified
-  def recipients
-    notified_users.collect(&:mail)
+    notified.collect(&:mail)
   end
 
   # Returns the number of hours spent on this issue
@@ -774,7 +752,7 @@ class Issue < ActiveRecord::Base
   end
 
   def relations
-    @relations ||= IssueRelations.new(self, (relations_from + relations_to).sort)
+    @relations ||= (relations_from + relations_to).sort
   end
 
   # Preloads relations for a collection of issues
@@ -793,25 +771,6 @@ class Issue < ActiveRecord::Base
       hours_by_issue_id = TimeEntry.visible(user).sum(:hours, :group => :issue_id)
       issues.each do |issue|
         issue.instance_variable_set "@spent_hours", (hours_by_issue_id[issue.id] || 0)
-      end
-    end
-  end
-
-  # Preloads visible relations for a collection of issues
-  def self.load_visible_relations(issues, user=User.current)
-    if issues.any?
-      issue_ids = issues.map(&:id)
-      # Relations with issue_from in given issues and visible issue_to
-      relations_from = IssueRelation.includes(:issue_to => [:status, :project]).where(visible_condition(user)).where(:issue_from_id => issue_ids).all
-      # Relations with issue_to in given issues and visible issue_from
-      relations_to = IssueRelation.includes(:issue_from => [:status, :project]).where(visible_condition(user)).where(:issue_to_id => issue_ids).all
-
-      issues.each do |issue|
-        relations =
-          relations_from.select {|relation| relation.issue_from_id == issue.id} +
-          relations_to.select {|relation| relation.issue_to_id == issue.id}
-
-        issue.instance_variable_set "@relations", IssueRelations.new(issue, relations.sort)
       end
     end
   end
@@ -1052,20 +1011,11 @@ class Issue < ActiveRecord::Base
     end
   end
 
-  # Callback for after the creation of an issue by copy
-  # * adds a "copied to" relation with the copied issue
-  # * copies subtasks from the copied issue
+  # Copies subtasks from the copied issue
   def after_create_from_copy
-    return unless copy? && !@after_create_from_copy_handled
+    return unless copy?
 
-    if (@copied_from.project_id == project_id || Setting.cross_project_issue_relations?) && @copy_options[:link] != false
-      relation = IssueRelation.new(:issue_from => @copied_from, :issue_to => self, :relation_type => IssueRelation::TYPE_COPIED_TO)
-      unless relation.save
-        logger.error "Could not create relation while copying ##{@copied_from.id} to ##{id} due to validation errors: #{relation.errors.full_messages.join(', ')}" if logger
-      end
-    end
-
-    unless @copied_from.leaf? || @copy_options[:subtasks] == false
+    unless @copied_from.leaf? || @copy_options[:subtasks] == false || @subtasks_copied
       @copied_from.children.each do |child|
         unless child.visible?
           # Do not copy subtasks that are not visible to avoid potential disclosure of private data
@@ -1081,8 +1031,8 @@ class Issue < ActiveRecord::Base
           logger.error "Could not copy subtask ##{child.id} while copying ##{@copied_from.id} to ##{id} due to validation errors: #{copy.errors.full_messages.join(', ')}" if logger
         end
       end
+      @subtasks_copied = true
     end
-    @after_create_from_copy_handled = true
   end
 
   def update_nested_set_attributes
@@ -1193,7 +1143,7 @@ class Issue < ActiveRecord::Base
     end
   end
 
-  # Callback on file attachment
+  # Callback on attachment deletion
   def attachment_added(obj)
     if @current_journal && !obj.new_record?
       @current_journal.details << JournalDetail.new(:property => 'attachment', :prop_key => obj.id, :value => obj.filename)

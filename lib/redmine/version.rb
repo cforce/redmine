@@ -4,13 +4,13 @@ module Redmine
   module VERSION #:nodoc:
     MAJOR = 2
     MINOR = 1
-    TINY  = 2
+    TINY  = 3
 
     # Branch values:
     # * official release: nil
     # * stable branch:    stable
     # * trunk:            devel
-    BRANCH = 'devel'
+    BRANCH = 'stable'
 
     def self.revision
       revision = nil

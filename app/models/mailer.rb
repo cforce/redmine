@@ -62,7 +62,7 @@ class Mailer < ActionMailer::Base
     message_id journal
     references issue
     @author = journal.user
-    recipients = journal.recipients
+    recipients = issue.recipients
     # Watchers in cc
     cc = issue.watcher_recipients - recipients
     s = "[#{issue.project.name} - #{issue.tracker.name} ##{issue.id}] "

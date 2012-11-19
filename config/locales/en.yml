@@ -331,7 +331,6 @@ en:
   field_core_fields: Standard fields
   field_timeout: "Timeout (in seconds)"
   field_board_parent: Parent forum
-  field_private_notes: Private notes
 
   setting_app_title: Application title
   setting_app_subtitle: Application subtitle
@@ -417,8 +416,6 @@ en:
   permission_add_issue_notes: Add notes
   permission_edit_issue_notes: Edit notes
   permission_edit_own_issue_notes: Edit own notes
-  permission_view_private_notes: View private notes
-  permission_set_notes_private: Set notes as private
   permission_move_issues: Move issues
   permission_delete_issues: Delete issues
   permission_manage_public_queries: Manage public queries
@@ -619,7 +616,6 @@ en:
   label_current_status: Current status
   label_new_statuses_allowed: New statuses allowed
   label_all: all
-  label_any: any
   label_none: none
   label_nobody: nobody
   label_next: Next
@@ -673,9 +669,6 @@ en:
   label_ago: days ago
   label_contains: contains
   label_not_contains: doesn't contain
-  label_any_issues_in_project: any issues in project
-  label_any_issues_not_in_project: any issues not in project
-  label_no_issues_in_project: no issues in project
   label_day_plural: days
   label_repository: Repository
   label_repository_new: New repository
@@ -744,15 +737,13 @@ en:
   label_loading: Loading...
   label_relation_new: New relation
   label_relation_delete: Delete relation
-  label_relates_to: Related to
-  label_duplicates: Duplicates
-  label_duplicated_by: Duplicated by
-  label_blocks: Blocks
-  label_blocked_by: Blocked by
-  label_precedes: Precedes
-  label_follows: Follows
-  label_copied_to: Copied to
-  label_copied_from: Copied from
+  label_relates_to: related to
+  label_duplicates: duplicates
+  label_duplicated_by: duplicated by
+  label_blocks: blocks
+  label_blocked_by: blocked by
+  label_precedes: precedes
+  label_follows: follows
   label_end_to_start: end to start
   label_end_to_end: end to end
   label_start_to_start: start to start

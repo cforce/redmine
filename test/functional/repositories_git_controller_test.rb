@@ -82,35 +82,6 @@ class RepositoriesGitControllerTest < ActionController::TestCase
     assert_equal false, repo2.extra_report_last_commit
   end
 
-  def test_create_and_update
-    @request.session[:user_id] = 1
-    assert_difference 'Repository.count' do
-      post :create, :project_id => 'subproject1',
-                    :repository_scm => 'Git',
-                    :repository => {
-                       :url => '/test',
-                       :is_default => '0',
-                       :identifier => 'test-create',
-                       :extra_report_last_commit => '1',
-                     }
-    end
-    assert_response 302
-    repository = Repository.first(:order => 'id DESC')
-    assert_kind_of Repository::Git, repository
-    assert_equal '/test', repository.url
-    assert_equal true, repository.extra_report_last_commit
-
-    put :update, :id => repository.id,
-                 :repository => {
-                     :extra_report_last_commit => '0',
-                     :identifier => 'test-update',
-                 }
-    assert_response 302
-    repo2 = Repository.find(repository.id)
-    assert_equal 'test-update', repo2.identifier
-    assert_equal false, repo2.extra_report_last_commit
-  end
-
   if File.directory?(REPOSITORY_PATH)
     ## Ruby uses ANSI api to fork a process on Windows.
     ## Japanese Shift_JIS and Traditional Chinese Big5 have 0x5c(backslash) problem
@@ -461,16 +432,6 @@ class RepositoriesGitControllerTest < ActionController::TestCase
       end
     end
 
-    def test_diff_should_show_filenames
-      get :diff, :id => PRJ_ID, :rev => 'deff712f05a90d96edbd70facc47d944be5897e3', :type => 'inline'
-      assert_response :success
-      assert_template 'diff'
-      # modified file
-      assert_select 'th.filename', :text => 'sources/watchers_controller.rb'
-      # deleted file
-      assert_select 'th.filename', :text => 'test.txt'
-    end
-
     def test_save_diff_type
       user1 = User.find(1)
       user1.pref[:diff_type] = nil
@@ -569,6 +530,21 @@ class RepositoriesGitControllerTest < ActionController::TestCase
           end
         end
       end
+    end
+
+    def test_revisions
+      assert_equal 0, @repository.changesets.count
+      @repository.fetch_changesets
+      @project.reload
+      assert_equal NUM_REV, @repository.changesets.count
+      get :revisions, :id => PRJ_ID
+      assert_response :success
+      assert_template 'revisions'
+      assert_tag :tag => 'form',
+                 :attributes => {
+                   :method => 'get',
+                   :action => '/projects/subproject1/repository/revision'
+                 }
     end
 
     def test_revision
