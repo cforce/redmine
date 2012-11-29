@@ -1,4 +1,0 @@
-module MylynConnector::Test
-
-
-end
