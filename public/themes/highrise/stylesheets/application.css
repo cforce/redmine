@@ -1,12 +1,22 @@
 @import url(../../../stylesheets/application.css);
 @import url(blue.css);
 
-/* Hightrise theme version 1.0.0 by Kirill Bezrukov www.redminecrm.com */
+/* Hightrise theme version 1.0.3 by Kirill Bezrukov www.redminecrm.com */
 
 #header > h1 {
 	background: url(../images/logo.png) no-repeat 10px 0px;
 	padding: 5px 60px;
 	text-shadow: 0 1px 0 rgba(0, 0, 0, 0.8);
+}
+
+@media only screen and (-webkit-min-device-pixel-ratio: 2), 
+only screen and (min-device-pixel-ratio: 2) {
+	#header > h1 {
+		/* Reference the @2x Sprite */
+		background-image: url(../images/logo-2x.png);
+		/* Translate the @2x sprite's dimensions back to 1x */
+		background-size: 43px 30px; 
+	}
 }
 
 h1, h2, h3, h4 {
@@ -484,5 +494,57 @@ a.buy-button.blue {
 #title h2, #buttons, #title h1  {
 	min-width: 550px !important;
 }
+
+/*******************/
+/* 		jQuery UI			
+/*******************/
+.ui-widget {
+	font-family: inherit;
+	font-size: inherit;
+}
+
+.ui-widget-header {
+	font: bold 100% "Lucida Grande", Arial, sans-serif;
+	text-shadow: white 0 1px 0;
+	text-align: left;
+	padding: 6px;
+	background: #F1F5FA;
+	border: 1px solid #CCC;
+	border-radius: 0px;
+	color: black;
+}
+
+div.modal div.ui-dialog-titlebar {
+	margin: -5px;
+	margin-bottom: 10px;
+}
+
+.ui-widget-content {
+	background: white;
+}
+
+.ui-state-default, .ui-widget-content .ui-state-default, .ui-widget-header .ui-state-default {
+	background: #fcfcfc;
+	font-weight: bold;
+	color: inherit;
+}
+
+button.ui-corner-all {
+	border-radius: 0px;
+}
+
+.ui-dialog .ui-dialog-title {
+	float: left;
+	font-size: 14px;
+	padding: 2px 10px 1px 0px;
+	color: #444;
+}
+
+.ui-widget input, .ui-widget select, .ui-widget textarea, .ui-widget button {
+	font-family: inherit;
+	font-size: inherit;
+}
+
+
 
 

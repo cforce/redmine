@@ -1,7 +1,0 @@
-<p><%= l(:mail_body_version_closed, :project => link_to(h(@version.project.name), @project_url),
-                                    :version => link_to(h(@version.name), @version_url)) %><br />
-<em><%= @version.description %></em></p>
-
-<% if @wiki_url %>
-<%= link_to(h(@version.wiki_page_title), @wiki_url) %>
-<% end %>

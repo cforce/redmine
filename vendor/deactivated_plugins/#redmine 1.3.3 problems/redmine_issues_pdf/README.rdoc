@@ -1,3 +1,0 @@
-= parametric_pdf_export
-
-Description goes here

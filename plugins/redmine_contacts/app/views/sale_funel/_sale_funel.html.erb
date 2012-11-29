@@ -1,0 +1,31 @@
+<% if  @sale_funel.any? %>
+	<table class="list sales-funnel"> 
+		<thead>
+		<tr>
+			<th><%= h l(:label_deal_status) %></th>
+			<th><%= h l(:label_count) %></th>
+			<th><%= h l(:label_total) %></th>
+		</tr> 
+		</thead>
+		<% index = 0 %>
+		<%  @sale_funel.each do |deal_status, deals_count, deals_sum| %>   
+		<% index += 1 %>
+		<tr>
+			<td class="sales-funnel index_<%= index.to_s %>">
+			  <%= deal_status_tag(deal_status) %>
+			</td>
+			<td class="count">
+				<strong>
+					<%= h deals_count %>
+				</strong>  
+			</td>
+			<td class="total">  
+				<strong>
+					<%= deals_sum_to_currency deals_sum %>
+				</strong>  
+				
+			</td>
+		</tr>
+		<% end %>
+	</table>
+<% end %>  

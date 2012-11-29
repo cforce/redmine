@@ -1,3 +1,0 @@
-= issue_history
-
-Description goes here

@@ -1,5 +1,0 @@
-syntax: glob
-*.swp
-*.orig
-coverage/*
-features_rcov/*

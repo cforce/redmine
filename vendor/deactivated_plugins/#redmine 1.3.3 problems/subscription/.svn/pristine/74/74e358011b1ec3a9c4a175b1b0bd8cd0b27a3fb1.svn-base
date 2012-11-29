@@ -1,8 +1,0 @@
-<%= l(:mail_body_version_closed, :project => @version.project.name,
-                                 :version => @version.name) %>
-<%= @version.description %>
-
-<%= @version_url %>
-<% if @wiki_url %>
-<%= @wiki_url %>
-<% end %>

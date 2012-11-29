@@ -1,7 +1,0 @@
-<h1><%= l(:label_revision) %> <%= @changeset.format_identifier %></h1>
-<em><%= h(@changeset.author.to_s) %></em>
-
-<p><%= l(:label_revision) %>: <%= link_to(h(@revision_url), @revision_url) %><br />
-<%= l(:label_view_diff) %>: <%= link_to(h(@diff_url), @diff_url) %></p>
-
-<%= textilizable(@changeset, :comments, :only_path => false) %>

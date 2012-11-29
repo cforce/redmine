@@ -1,7 +1,0 @@
-# use glob syntax.
-syntax: glob
-
-*.e4p
-.eric4project
-*~
-

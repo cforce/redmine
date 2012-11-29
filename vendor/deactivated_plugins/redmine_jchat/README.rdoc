@@ -1,1 +1,0 @@
-See original README here : https://github.com/joshsten/redmine_jchat

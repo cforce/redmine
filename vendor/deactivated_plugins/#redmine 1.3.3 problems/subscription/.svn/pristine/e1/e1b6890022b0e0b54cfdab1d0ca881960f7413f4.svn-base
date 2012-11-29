@@ -1,7 +1,0 @@
-<%= l(:label_revision) %> <%= @changeset.format_identifier %>
-<%= @changeset.author.to_s %>
-
-<%= l(:label_revision) %>: <%= @revision_url %>
-<%= l(:label_view_diff) %>: <%= @diff_url %>
-
-<%= @changeset.comments %>
